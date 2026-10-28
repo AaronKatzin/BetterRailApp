@@ -267,8 +267,11 @@ jobs:
           fi
           TAG="preview-${SANITIZED}"
           APK_NAME="AaronRail-arm64.apk"
-          cp "$APK" "$RUNNER_TEMP/$APK_NAME"
-          SIZE=$(du -h "$RUNNER_TEMP/$APK_NAME" | awk '{print $1}')
+          DEST="$RUNNER_TEMP/$APK_NAME"
+          if [ "$(realpath "$APK")" != "$(realpath "$DEST")" ]; then
+            cp "$APK" "$DEST"
+          fi
+          SIZE=$(du -h "$DEST" | awk '{print $1}')
           SHA=$(git rev-parse --short HEAD)
           cat > "$RUNNER_TEMP/notes.md" << EOF
           Sideload preview of **Aaron Rail** (\`com.aaronkatzin.rail\`) from \`$BRANCH\` @ \`$SHA\`.
@@ -291,7 +294,7 @@ jobs:
               --target "$GITHUB_SHA" \
               --title "Aaron Rail preview ($BRANCH)" \
               --notes-file "$RUNNER_TEMP/notes.md" \
-              "$RUNNER_TEMP/$APK_NAME"; then
+              "$DEST"; then
               break
             fi
             sleep 3
