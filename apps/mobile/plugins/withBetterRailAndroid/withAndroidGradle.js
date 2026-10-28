@@ -1,4 +1,4 @@
-const { withAppBuildGradle, withDangerousMod, withProjectBuildGradle } = require("@expo/config-plugins")
+const { withAppBuildGradle, withFinalizedMod, withProjectBuildGradle } = require("@expo/config-plugins")
 const { mergeContents } = require("@expo/config-plugins/build/utils/generateCode")
 const fs = require("node:fs")
 const path = require("node:path")
@@ -151,12 +151,12 @@ const withProjectGradle = (config) =>
     return cfg
   })
 
-// Expo's package mod writes namespace and applicationId together. Run after that
-// and change only applicationId, or the widget providers (relative .widget.* names)
-// and com.betterrail.R stop resolving.
+// Expo writes namespace and applicationId together from android.package, and dangerous
+// mods run before that write. Finalized runs last: change only applicationId so the
+// widget providers (relative .widget.* names) and com.betterrail.R keep resolving.
 const withPreviewApplicationId = (config) => {
   if (process.env.AARON_RAIL_PREVIEW !== "1") return config
-  return withDangerousMod(config, [
+  return withFinalizedMod(config, [
     "android",
     (cfg) => {
       const gradlePath = path.join(cfg.modRequest.platformProjectRoot, "app", "build.gradle")
@@ -169,6 +169,18 @@ const withPreviewApplicationId = (config) => {
         throw new Error("AARON_RAIL_PREVIEW: namespace must stay com.betterrail")
       }
       fs.writeFileSync(gradlePath, next)
+
+      // expo-dev-client adds exp+<slug>, which the Play Store app also claims.
+      const manifestPath = path.join(cfg.modRequest.platformProjectRoot, "app", "src", "main", "AndroidManifest.xml")
+      const manifest = fs.readFileSync(manifestPath, "utf8")
+      const stripped = manifest.replace(/\s*<data android:scheme="exp\+better-rail"\/>/g, "")
+      if (stripped.includes('android:scheme="betterrail"') || stripped.includes("better-rail.co.il") || stripped.includes("exp+better-rail")) {
+        throw new Error("AARON_RAIL_PREVIEW: manifest still claims a Better Rail scheme or App Link")
+      }
+      if (!stripped.includes('android:scheme="aaronrail"')) {
+        throw new Error("AARON_RAIL_PREVIEW: manifest is missing the aaronrail scheme")
+      }
+      fs.writeFileSync(manifestPath, stripped)
       return cfg
     },
   ])
