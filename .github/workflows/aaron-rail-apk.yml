@@ -105,11 +105,29 @@ jobs:
           fi
           echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
-          SM=$(find "$SDK/cmdline-tools" -type f -name sdkmanager | sort | tail -1)
-          if [ -z "$SM" ]; then
-            echo "::error::sdkmanager is missing under $SDK/cmdline-tools"
-            exit 1
-          fi
+
+          # The image's sdkmanager can be older than compileSdk 37. Install a
+          # current cmdline-tools from Google's repository index, then use that
+          # to fetch only the platform, build-tools, and NDK this prebuild needs.
+          python3 - << 'PY'
+          import re, urllib.request, pathlib
+          xml = urllib.request.urlopen(
+              "https://dl.google.com/android/repository/repository2-1.xml", timeout=60
+          ).read().decode("utf-8", "replace")
+          names = re.findall(r"commandlinetools-linux-\d+_latest\.zip", xml)
+          if not names:
+              raise SystemExit("commandlinetools zip was not listed in repository2-1.xml")
+          pathlib.Path("/tmp/cmdline-tools-name.txt").write_text(names[-1])
+          print(names[-1])
+          PY
+          ZIP_NAME=$(cat /tmp/cmdline-tools-name.txt)
+          curl -fsSL "https://dl.google.com/android/repository/${ZIP_NAME}" -o /tmp/commandlinetools.zip
+          rm -rf /tmp/cmdline-tools-extract "$SDK/cmdline-tools/latest"
+          mkdir -p /tmp/cmdline-tools-extract "$SDK/cmdline-tools/latest"
+          unzip -q /tmp/commandlinetools.zip -d /tmp/cmdline-tools-extract
+          mv /tmp/cmdline-tools-extract/cmdline-tools/* "$SDK/cmdline-tools/latest/"
+          SM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SM"
           yes | "$SM" --sdk_root="$SDK" --licenses >/dev/null || true
           "$SM" --sdk_root="$SDK" \
             "platforms;android-37" \
