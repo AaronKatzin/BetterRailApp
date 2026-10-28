@@ -10,6 +10,23 @@ import com.betterrail.widget.resources.UpcomingTrainResources
 import com.betterrail.widget.WidgetSize
 import com.betterrail.widget.utils.TimeFormatUtils
 
+/** Leave-by countdown for one commute widget. Times are internal "HH:mm". */
+data class CommuteGlance(
+    val leaveInMinutes: Int,
+    val leaveByTime: String,
+    val trainTime: String,
+    val etaTime: String,
+    val officeLabel: String,
+    val upcoming: List<CommuteUpcoming> = emptyList(),
+    val labelPrefix: String = "",
+)
+
+data class CommuteUpcoming(
+    val leaveByTime: String,
+    val etaTime: String,
+    val trainTime: String,
+)
+
 /**
  * Represents the possible states of a train widget
  */
@@ -30,7 +47,8 @@ sealed class WidgetState {
         val originName: String,
         val destinationName: String,
         val nextTrain: WidgetTrainItem,
-        val upcomingTrains: List<WidgetTrainItem> = emptyList()
+        val upcomingTrains: List<WidgetTrainItem> = emptyList(),
+        val commute: CommuteGlance? = null,
     ) : WidgetState()
     
     data class Error(
@@ -57,7 +75,8 @@ sealed class WidgetState {
         val originName: String,
         val destinationName: String,
         val firstTrain: WidgetTrainItem,
-        val upcomingTrains: List<WidgetTrainItem> = emptyList()
+        val upcomingTrains: List<WidgetTrainItem> = emptyList(),
+        val commute: CommuteGlance? = null,
     ) : WidgetState()
     
     data class NoTrains(
@@ -72,7 +91,8 @@ sealed class WidgetState {
         val destinationName: String,
         val firstTrain: WidgetTrainItem,
         val upcomingTrains: List<WidgetTrainItem> = emptyList(),
-        val daysAway: Int
+        val daysAway: Int,
+        val commute: CommuteGlance? = null,
     ) : WidgetState()
 }
 
@@ -90,6 +110,7 @@ class WidgetStateRenderer(
 
         // Apply RTL layout adjustments (direction, arrow rotation, etc.)
         com.betterrail.widget.utils.WidgetRTLHelper.applyRTLAdjustments(context, views, layoutResource)
+        views.setViewVisibility(R.id.widget_office_toggle, android.view.View.GONE)
 
         when (state) {
             is WidgetState.Configuration -> renderConfiguration(localeContext, views, state)
@@ -152,12 +173,13 @@ class WidgetStateRenderer(
         if (isMultiTrainLayout()) {
             views.setTextViewText(R.id.widget_arrival_time, TimeFormatUtils.formatForDisplay(context, state.nextTrain.arrivalTime))
             if (state.upcomingTrains.isNotEmpty()) {
-                showUpcomingTrains(context, views, state.upcomingTrains, heightDp)
+                showUpcomingTrains(context, views, state.upcomingTrains, heightDp, state.commute)
             } else {
                 hideUpcomingTrains(context, views)
             }
         }
-        
+
+        state.commute?.let { applyCommute(context, views, it) }
         setStationBackground(views, state.originId)
     }
     
@@ -271,10 +293,11 @@ class WidgetStateRenderer(
         setStationBackground(views, state.originId)
         
         if (state.upcomingTrains.isNotEmpty()) {
-            showUpcomingTrains(context, views, state.upcomingTrains, heightDp)
+            showUpcomingTrains(context, views, state.upcomingTrains, heightDp, state.commute)
         } else {
             hideUpcomingTrains(context, views)
         }
+        state.commute?.let { applyCommute(context, views, it) }
     }
     
     private fun renderNoTrains(context: Context, views: RemoteViews, state: WidgetState.NoTrains) {
@@ -318,10 +341,11 @@ class WidgetStateRenderer(
         setStationBackground(views, state.originId)
         
         if (state.upcomingTrains.isNotEmpty()) {
-            showUpcomingTrains(context, views, state.upcomingTrains, heightDp)
+            showUpcomingTrains(context, views, state.upcomingTrains, heightDp, state.commute)
         } else {
             hideUpcomingTrains(context, views)
         }
+        state.commute?.let { applyCommute(context, views, it) }
     }
     
     private fun renderTrainDetails(context: Context, views: RemoteViews, train: WidgetTrainItem) {
@@ -349,6 +373,38 @@ class WidgetStateRenderer(
         }
     }
     
+    private fun applyCommute(
+        context: Context,
+        views: RemoteViews,
+        glance: CommuteGlance,
+    ) {
+        views.setViewVisibility(R.id.widget_office_toggle, android.view.View.VISIBLE)
+        views.setTextViewText(R.id.widget_office_toggle, glance.officeLabel)
+        views.setContentDescription(R.id.widget_office_toggle, context.getString(R.string.switch_office))
+
+        val minutes = glance.leaveInMinutes.coerceAtLeast(0)
+        val leaveLabel = context.getString(R.string.leave_in_minutes, minutes)
+        val label = if (glance.labelPrefix.isEmpty()) leaveLabel else "${glance.labelPrefix} · $leaveLabel"
+        views.setTextViewText(R.id.widget_train_label, label)
+        views.setTextColor(R.id.widget_train_label, context.getColor(R.color.widget_next_train_text))
+        views.setTextViewText(getTrainTimeId(), TimeFormatUtils.formatForDisplay(context, glance.leaveByTime))
+
+        val trainClock = TimeFormatUtils.formatForDisplay(context, glance.trainTime)
+        views.setTextViewText(R.id.widget_platform, context.getString(R.string.for_the_train, trainClock))
+        views.setTextViewText(R.id.widget_train_number, "")
+        views.setViewVisibility(R.id.widget_dot_separator, android.view.View.GONE)
+
+        if (isMultiTrainLayout()) {
+            views.setTextViewText(R.id.widget_arrival_label, context.getString(R.string.eta_caps))
+            views.setTextViewText(R.id.widget_arrival_time, TimeFormatUtils.formatForDisplay(context, glance.etaTime))
+        }
+
+        if (layoutResource == R.layout.widget_compact_4x3) {
+            views.setTextViewText(R.id.widget_platform_label, context.getString(R.string.train_caps))
+            views.setTextViewText(R.id.widget_platform_val, trainClock)
+        }
+    }
+
     private fun getTrainTimeId(): Int {
         return when (layoutResource) {
             R.layout.widget_compact_2x2 -> R.id.widget_train_time
@@ -362,7 +418,8 @@ class WidgetStateRenderer(
         context: Context,
         views: RemoteViews,
         upcomingTrains: List<WidgetTrainItem>,
-        heightDp: Int = 0
+        heightDp: Int = 0,
+        commute: CommuteGlance? = null,
     ) {
         if (!isMultiTrainLayout()) return
 
@@ -380,9 +437,21 @@ class WidgetStateRenderer(
             views.setTextViewText(R.id.widget_header_train, context.getString(R.string.train_caps))
         }
 
+        if (commute != null) {
+            views.setTextViewText(R.id.widget_upcoming_label, context.getString(R.string.leave_eta_header))
+            if (layoutResource == R.layout.widget_compact_4x3) {
+                views.setTextViewText(R.id.widget_header_depart, context.getString(R.string.leave_caps))
+                views.setTextViewText(R.id.widget_header_arrive, context.getString(R.string.eta_caps))
+                views.setTextViewText(R.id.widget_header_duration, context.getString(R.string.train_caps))
+            }
+        }
+
         // Dynamically calculate how many rows fit cleanly without vertical clipping
+        val commuteCap = if (commute != null) commute.upcoming.size else Int.MAX_VALUE
         val maxFittingRows = if (layoutResource == R.layout.widget_compact_4x3 && heightDp > 0) {
             ((heightDp - 210) / 29).coerceIn(1, WidgetSize.MAX_UPCOMING_TRAINS_4X3)
+        } else if (commute != null) {
+            commute.upcoming.size.coerceAtMost(WidgetSize.MAX_UPCOMING_TRAINS)
         } else {
             WidgetSize.MAX_UPCOMING_TRAINS_4X3
         }
@@ -390,19 +459,23 @@ class WidgetStateRenderer(
         val resourcesHelper = UpcomingTrainResources.createForLayout(context, layoutResource)
 
         resourcesHelper.forEachRow { index, resources ->
-            if (index < upcomingTrains.size && index < maxFittingRows) {
+            val commuteRow = commute?.upcoming?.getOrNull(index)
+            if (index < upcomingTrains.size && index < maxFittingRows && index < commuteCap) {
                 val train = upcomingTrains[index]
                 views.setViewVisibility(resources.rowId, android.view.View.VISIBLE)
                 if (resources.dividerId != 0) {
                     views.setViewVisibility(resources.dividerId, android.view.View.VISIBLE)
                 }
-                views.setTextViewText(resources.trainTimeId, TimeFormatUtils.formatForDisplay(context, train.departureTime))
+                val departText = commuteRow?.leaveByTime ?: train.departureTime
+                val arriveText = commuteRow?.etaTime ?: train.arrivalTime
+                views.setTextViewText(resources.trainTimeId, TimeFormatUtils.formatForDisplay(context, departText))
                 if (layoutResource == R.layout.widget_compact_4x3) {
                     views.setTextColor(resources.trainTimeId, 0xFF111111.toInt())
                 }
-                views.setTextViewText(resources.arrivalTimeId, TimeFormatUtils.formatForDisplay(context, train.arrivalTime))
+                views.setTextViewText(resources.arrivalTimeId, TimeFormatUtils.formatForDisplay(context, arriveText))
                 if (resources.durationId != 0) {
-                    val durationText = formatDuration(context, train)
+                    val durationText = commuteRow?.trainTime?.let { TimeFormatUtils.formatForDisplay(context, it) }
+                        ?: formatDuration(context, train)
                     views.setTextViewText(resources.durationId, durationText)
                 }
                 if (resources.platformId != 0) {

@@ -18,6 +18,14 @@ import com.betterrail.widget.data.WidgetScheduleData
 import com.betterrail.widget.lifecycle.WidgetCoroutineManager
 import com.betterrail.widget.state.WidgetState
 import com.betterrail.widget.scheduler.WidgetUpdateScheduler
+import com.betterrail.widget.commute.CommuteOffice
+import com.betterrail.widget.commute.CommutePlanner
+import com.betterrail.widget.commute.PlannedTrain
+import com.betterrail.widget.commute.ResolvedCommute
+import com.betterrail.widget.commute.isCommuteConfigured
+import com.betterrail.widget.commute.toCommuteSettings
+import com.betterrail.widget.state.CommuteGlance
+import com.betterrail.widget.state.CommuteUpcoming
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.firstOrNull
@@ -85,6 +93,7 @@ abstract class ModernBaseWidgetProvider : AppWidgetProvider() {
     abstract fun getActionRefresh(): String
     abstract fun getActionWidgetUpdate(): String
     abstract fun getActionRouteReversal(): String
+    abstract fun getActionOfficeToggle(): String
     abstract fun getLayoutResource(): Int
     abstract fun getWidgetContainerId(): Int
     abstract fun getLogTag(): String
@@ -105,13 +114,13 @@ abstract class ModernBaseWidgetProvider : AppWidgetProvider() {
         // Store displayed train time for stale detection
         when (state) {
             is WidgetState.Schedule -> {
-                storeDisplayedTrainTime(context, state.nextTrain.departureTime)
+                storeDisplayedTrainTime(context, state.commute?.leaveByTime ?: state.nextTrain.departureTime)
             }
             is WidgetState.TomorrowSchedule -> {
-                storeDisplayedTrainTime(context, state.firstTrain.departureTime)
+                storeDisplayedTrainTime(context, state.commute?.leaveByTime ?: state.firstTrain.departureTime)
             }
             is WidgetState.FutureSchedule -> {
-                storeDisplayedTrainTime(context, state.firstTrain.departureTime)
+                storeDisplayedTrainTime(context, state.commute?.leaveByTime ?: state.firstTrain.departureTime)
             }
             else -> {
                 // Other states don't show train times
@@ -166,6 +175,7 @@ abstract class ModernBaseWidgetProvider : AppWidgetProvider() {
             getActionRefresh() -> handleRefreshAction(context)
             getActionWidgetUpdate() -> handleWidgetUpdateAction(context, intent)
             getActionRouteReversal() -> handleRouteReversalAction(context, intent)
+            getActionOfficeToggle() -> handleOfficeToggleAction(context, intent)
         }
     }
 
@@ -312,9 +322,10 @@ abstract class ModernBaseWidgetProvider : AppWidgetProvider() {
         allTrains: List<WidgetTrainItem>,
         isFromTomorrowRequest: Boolean
     ) {
-        // Filter to get only future trains based on current date/time
-        val upcomingTrains = filterUpcomingTrains(allTrains)
-        
+        val localeContext = com.betterrail.widget.utils.LocaleUtils.createLocaleContext(context)
+        val selection = selectDisplayTrains(localeContext, widgetData, allTrains)
+        val upcomingTrains = selection.trains
+
         if (upcomingTrains.isEmpty()) {
             if (isFromTomorrowRequest) {
                 showNoTrainsState(context, appWidgetManager, appWidgetId, widgetData)
@@ -329,36 +340,51 @@ abstract class ModernBaseWidgetProvider : AppWidgetProvider() {
         val firstTrain = upcomingTrains.first()
         val daysAway = getDaysFromToday(firstTrain.departureTimestamp)
 
-        val localeContext = com.betterrail.widget.utils.LocaleUtils.createLocaleContext(context)
         val originName = StationsData.getStationName(localeContext, widgetData.originId)
         val destinationName = StationsData.getStationName(localeContext, widgetData.destinationId)
         
         Log.d(getLogTag(), "First upcoming train: ${firstTrain.departureTimestamp}, Days away: $daysAway")
         
+        val glance = selection.glance?.let { base ->
+            when (daysAway) {
+                0 -> base
+                1 -> base.copy(labelPrefix = localeContext.getString(R.string.tomorrow))
+                else -> base.copy(
+                    labelPrefix = localeContext.resources.getQuantityString(R.plurals.upcoming_in_days, daysAway, daysAway)
+                )
+            }
+        }
+        val laterTrains = upcomingTrains.drop(1)
+
         val state = when (daysAway) {
             0 -> {
                 // Same date as today = NEXT TRAIN
                 Log.d(getLogTag(), "First train ${firstTrain.departureTime} is today - showing as NEXT TRAIN")
-                WidgetState.Schedule(widgetData.originId, originName, destinationName, firstTrain, upcomingTrains.drop(1))
+                WidgetState.Schedule(widgetData.originId, originName, destinationName, firstTrain, laterTrains, glance)
             }
             1 -> {
                 // +1 day from today = TOMORROW
                 Log.d(getLogTag(), "First train ${firstTrain.departureTime} is tomorrow - showing as TOMORROW")
-                WidgetState.TomorrowSchedule(widgetData.originId, originName, destinationName, firstTrain, upcomingTrains.drop(1))
+                WidgetState.TomorrowSchedule(widgetData.originId, originName, destinationName, firstTrain, laterTrains, glance)
             }
             else -> {
                 // +2 or more days = UPCOMING IN X DAYS
                 Log.d(getLogTag(), "First train ${firstTrain.departureTime} is $daysAway days away - showing as UPCOMING IN X DAYS")
-                WidgetState.FutureSchedule(widgetData.originId, originName, destinationName, firstTrain, upcomingTrains.drop(1), daysAway)
+                WidgetState.FutureSchedule(widgetData.originId, originName, destinationName, firstTrain, laterTrains, daysAway, glance)
             }
         }
         
         updateWidgetUI(context, appWidgetManager, appWidgetId, state)
 
         if (isFromTomorrowRequest || daysAway != 0) return
-        if (!isEffective4x3(context, appWidgetId)) return
+        val fillCommute = widgetData.isCommuteConfigured()
+        if (!fillCommute && !isEffective4x3(context, appWidgetId)) return
 
-        val maxNeeded = WidgetSize.MAX_UPCOMING_TRAINS_4X3 + 1
+        val maxNeeded = if (fillCommute) {
+            1 + CommutePlanner.EXTRA_TRAINS
+        } else {
+            WidgetSize.MAX_UPCOMING_TRAINS_4X3 + 1
+        }
         if (upcomingTrains.size >= maxNeeded) return
 
         try {
@@ -367,16 +393,20 @@ abstract class ModernBaseWidgetProvider : AppWidgetProvider() {
                 .firstOrNull()
 
             if (tomorrowResource is Resource.Success && tomorrowResource.data.routes.isNotEmpty()) {
-                val tomorrowUpcoming = filterUpcomingTrains(tomorrowResource.data.routes)
-                if (tomorrowUpcoming.isNotEmpty()) {
-                    val neededCount = maxNeeded - upcomingTrains.size
-                    val combinedTrains = upcomingTrains + tomorrowUpcoming.take(neededCount)
+                val combined = selectDisplayTrains(
+                    localeContext,
+                    widgetData,
+                    allTrains + tomorrowResource.data.routes,
+                )
+                if (combined.trains.size > upcomingTrains.size) {
+                    val shown = combined.trains.take(maxNeeded)
                     val updatedState = WidgetState.Schedule(
                         widgetData.originId,
                         originName,
                         destinationName,
-                        firstTrain,
-                        combinedTrains.drop(1)
+                        shown.first(),
+                        shown.drop(1),
+                        combined.glance,
                     )
                     updateWidgetUI(context, appWidgetManager, appWidgetId, updatedState)
                 }
@@ -395,6 +425,57 @@ abstract class ModernBaseWidgetProvider : AppWidgetProvider() {
         }
     }
     
+    private data class DisplaySelection(
+        val trains: List<WidgetTrainItem>,
+        val glance: CommuteGlance?,
+    )
+
+    /**
+     * Commute widgets keep trains you can still leave for. Everyone else keeps the next departures.
+     */
+    private fun selectDisplayTrains(
+        context: Context,
+        widgetData: WidgetData,
+        allTrains: List<WidgetTrainItem>,
+    ): DisplaySelection {
+        if (!widgetData.isCommuteConfigured()) {
+            return DisplaySelection(filterUpcomingTrains(allTrains), null)
+        }
+        val now = ZonedDateTime.now()
+        val resolved = CommutePlanner.resolve(widgetData.toCommuteSettings(now), now)
+        val planned = CommutePlanner.visiblePlans(allTrains, resolved, now.toLocalDateTime())
+        if (planned.isEmpty()) return DisplaySelection(emptyList(), null)
+        return DisplaySelection(planned.map { it.item }, buildGlance(context, widgetData, resolved, planned))
+    }
+
+    private fun buildGlance(
+        context: Context,
+        widgetData: WidgetData,
+        resolved: ResolvedCommute,
+        planned: List<PlannedTrain>,
+    ): CommuteGlance {
+        val first = planned.first().plan
+        val officeLabel = when (resolved.office) {
+            CommuteOffice.A -> widgetData.officeALabel.ifBlank { context.getString(R.string.office_a_name) }
+            CommuteOffice.B -> widgetData.officeBLabel.ifBlank { context.getString(R.string.office_b_name) }
+        }
+        val upcoming = planned.drop(1).map { plannedTrain ->
+            CommuteUpcoming(
+                leaveByTime = CommutePlanner.formatClock(plannedTrain.plan.leaveBy),
+                etaTime = CommutePlanner.formatClock(plannedTrain.plan.eta),
+                trainTime = CommutePlanner.formatClock(plannedTrain.plan.trainDeparture),
+            )
+        }
+        return CommuteGlance(
+            leaveInMinutes = first.leaveInMinutes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+            leaveByTime = CommutePlanner.formatClock(first.leaveBy),
+            trainTime = CommutePlanner.formatClock(first.trainDeparture),
+            etaTime = CommutePlanner.formatClock(first.eta),
+            officeLabel = officeLabel,
+            upcoming = upcoming,
+        )
+    }
+
     /**
      * Filter trains to show only those that are upcoming based on current date and time
      */
@@ -564,8 +645,10 @@ abstract class ModernBaseWidgetProvider : AppWidgetProvider() {
                                 deeplinkPath = getWidgetType()
                             )
                             
-                            // Set up route-specific click handlers
-                            if (widgetData.allowRouteReversal) {
+                            if (widgetData.isCommuteConfigured()) {
+                                setupOfficeToggleClickIntent(context, views, appWidgetId)
+                                setupRouteDeepLinkClickIntent(context, views, appWidgetId, widgetData)
+                            } else if (widgetData.allowRouteReversal) {
                                 setupRouteReversalClickIntent(context, views, appWidgetId)
                             } else {
                                 setupRouteDeepLinkClickIntent(context, views, appWidgetId, widgetData)
@@ -589,8 +672,10 @@ abstract class ModernBaseWidgetProvider : AppWidgetProvider() {
                                 deeplinkPath = getWidgetType()
                             )
                             
-                            // Set up route-specific click handlers
-                            if (widgetData.allowRouteReversal) {
+                            if (widgetData.isCommuteConfigured()) {
+                                setupOfficeToggleClickIntent(context, views, appWidgetId)
+                                setupRouteDeepLinkClickIntent(context, views, appWidgetId, widgetData)
+                            } else if (widgetData.allowRouteReversal) {
                                 setupRouteReversalClickIntent(context, views, appWidgetId)
                             } else {
                                 setupRouteDeepLinkClickIntent(context, views, appWidgetId, widgetData)
@@ -687,6 +772,20 @@ abstract class ModernBaseWidgetProvider : AppWidgetProvider() {
         views.setOnClickPendingIntent(getWidgetContainerId(), pendingIntent)
     }
 
+    private fun setupOfficeToggleClickIntent(context: Context, views: RemoteViews, appWidgetId: Int) {
+        val intent = Intent(context, this::class.java).apply {
+            action = getActionOfficeToggle()
+            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            appWidgetId + 2000,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        views.setOnClickPendingIntent(R.id.widget_office_toggle, pendingIntent)
+    }
+
     private fun setupRouteReversalClickIntent(context: Context, views: RemoteViews, appWidgetId: Int) {
         val intent = Intent(context, this::class.java).apply {
             action = getActionRouteReversal()
@@ -777,6 +876,30 @@ abstract class ModernBaseWidgetProvider : AppWidgetProvider() {
             val appWidgetManager = AppWidgetManager.getInstance(context)
             Log.d(getLogTag(), "Scheduled update for widget $appWidgetId")
             updateWidget(context, appWidgetManager, appWidgetId)
+        }
+    }
+
+    private fun handleOfficeToggleAction(context: Context, intent: Intent) {
+        val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, INVALID_WIDGET_ID)
+        if (appWidgetId == INVALID_WIDGET_ID) return
+        coroutineManager.launchInWidgetScope(appWidgetId) {
+            try {
+                val widgetData = preferencesRepository.getWidgetData(appWidgetId)
+                if (widgetData == null || !widgetData.isCommuteConfigured()) return@launchInWidgetScope
+                val now = ZonedDateTime.now()
+                val current = CommutePlanner.resolve(widgetData.toCommuteSettings(now), now).office
+                val next = CommutePlanner.toggleOffice(current)
+                preferencesRepository.saveWidgetData(
+                    appWidgetId,
+                    widgetData.copy(
+                        officeOverride = next.name,
+                        officeOverrideDate = now.toLocalDate().toString(),
+                    )
+                )
+                updateWidget(context, AppWidgetManager.getInstance(context), appWidgetId)
+            } catch (e: Exception) {
+                Log.e(getLogTag(), "Error toggling office for widget $appWidgetId", e)
+            }
         }
     }
 
@@ -879,19 +1002,22 @@ abstract class ModernBaseWidgetProvider : AppWidgetProvider() {
      */
     private fun getEffectiveWidgetData(widgetData: WidgetData?): WidgetData? {
         if (widgetData == null) return null
+        if (widgetData.isCommuteConfigured()) {
+            val now = ZonedDateTime.now()
+            val resolved = CommutePlanner.resolve(widgetData.toCommuteSettings(now), now)
+            Log.d(getLogTag(), "Commute route ${resolved.direction} office ${resolved.office}: ${resolved.originStationId} -> ${resolved.destinationStationId}")
+            return widgetData.copy(
+                originId = resolved.originStationId,
+                destinationId = resolved.destinationStationId,
+            )
+        }
         if (!widgetData.autoReverseRoute) return widgetData
 
-        val currentTimestamp = System.currentTimeMillis()
         val now = ZonedDateTime.now()
-        val hour = now.hour
-        
-        val isEvening = hour >= 13 || hour < 1
-        
-        val isOverrideActive = currentTimestamp < widgetData.manualOverrideUntil
-        
-        // XOR Logic: Reverse if (Evening AND NotOverride) OR (NotEvening AND Override)
+        val isEvening = CommutePlanner.isEvening(now.toLocalTime())
+        val isOverrideActive = System.currentTimeMillis() < widgetData.manualOverrideUntil
         val shouldReverse = isEvening xor isOverrideActive
-        
+
         return if (shouldReverse) {
              Log.d(getLogTag(), "Smart Reversal ACTIVE for widget (Evening=$isEvening, Override=$isOverrideActive)")
              widgetData.copy(
@@ -909,21 +1035,7 @@ abstract class ModernBaseWidgetProvider : AppWidgetProvider() {
      * Calculates the timestamp for the start of the next time window
      */
     private fun calculateNextWindowStart(): Long {
-        val now = ZonedDateTime.now()
-        val hour = now.hour
-        
-        val nextWindowStart = if (hour in 1..12) {
-            // Morning -> Next is 13:00 Today
-            now.withHour(13).withMinute(0).withSecond(0).withNano(0)
-        } else if (hour >= 13) {
-            // Evening Part 1 -> Next is 01:00 Tomorrow
-            now.plusDays(1).withHour(1).withMinute(0).withSecond(0).withNano(0)
-        } else {
-            // Evening Part 2 (hour 0) -> Next is 01:00 Today
-            now.withHour(1).withMinute(0).withSecond(0).withNano(0)
-        }
-        
-        return nextWindowStart.toInstant().toEpochMilli()
+        return CommutePlanner.nextDirectionWindowStart(ZonedDateTime.now()).toInstant().toEpochMilli()
     }
             
     /**
