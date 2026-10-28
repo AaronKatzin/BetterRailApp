@@ -705,7 +705,9 @@ abstract class ModernBaseWidgetProvider : AppWidgetProvider() {
         widgetData: WidgetData,
         deeplinkPath: String = "widget"
     ): PendingIntent {
-        val deepLinkUri = "betterrail://$deeplinkPath?originId=${widgetData.originId}&destinationId=${widgetData.destinationId}"
+        // The sideload preview is a different applicationId and must not steal betterrail://.
+        val scheme = if (context.packageName == "com.aaronkatzin.rail") "aaronrail" else "betterrail"
+        val deepLinkUri = "$scheme://$deeplinkPath?originId=${widgetData.originId}&destinationId=${widgetData.destinationId}"
 
         val localeContext = com.betterrail.widget.utils.LocaleUtils.createLocaleContext(context)
 

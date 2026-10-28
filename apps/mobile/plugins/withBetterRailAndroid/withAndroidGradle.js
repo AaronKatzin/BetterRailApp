@@ -1,6 +1,11 @@
-const { withAppBuildGradle, withProjectBuildGradle } = require("@expo/config-plugins")
+const { withAppBuildGradle, withDangerousMod, withProjectBuildGradle } = require("@expo/config-plugins")
 const { mergeContents } = require("@expo/config-plugins/build/utils/generateCode")
+const fs = require("node:fs")
 const path = require("node:path")
+
+// Install id for the sideload preview. Distinct from the namespace (com.betterrail)
+// so it can sit beside the Play Store app without moving widget classes or R.
+const PREVIEW_APPLICATION_ID = "com.aaronkatzin.rail"
 
 // 2.58 reads Kotlin 2.2 metadata (RN 0.88). 2.59+ only passes its kapt args to AGP's legacy-kapt,
 // not the kotlin-kapt this app applies, so Hilt codegen fails there.
@@ -52,7 +57,12 @@ const withAppGradle = (config) =>
     src = mergeContents({
       tag: "better-rail-android-google-services",
       src,
-      newSrc: `apply plugin: "com.google.gms.google-services"`,
+      // Preview google-services.json has no client for com.aaronkatzin.rail. Skip the
+      // plugin so the timetable widget still builds; it does not use Firebase.
+      newSrc:
+        process.env.AARON_RAIL_PREVIEW === "1"
+          ? `// AARON_RAIL_PREVIEW: google-services plugin skipped (no Firebase client for this package)`
+          : `apply plugin: "com.google.gms.google-services"`,
       anchor: /apply plugin: "com\.facebook\.react"/,
       offset: 1,
       comment: "//",
@@ -141,6 +151,29 @@ const withProjectGradle = (config) =>
     return cfg
   })
 
-const withAndroidGradle = (config) => withProjectGradle(withAppGradle(config))
+// Expo's package mod writes namespace and applicationId together. Run after that
+// and change only applicationId, or the widget providers (relative .widget.* names)
+// and com.betterrail.R stop resolving.
+const withPreviewApplicationId = (config) => {
+  if (process.env.AARON_RAIL_PREVIEW !== "1") return config
+  return withDangerousMod(config, [
+    "android",
+    (cfg) => {
+      const gradlePath = path.join(cfg.modRequest.platformProjectRoot, "app", "build.gradle")
+      const src = fs.readFileSync(gradlePath, "utf8")
+      const next = src.replace(/applicationId\s+['"][^'"]+['"]/, `applicationId '${PREVIEW_APPLICATION_ID}'`)
+      if (!next.includes(`applicationId '${PREVIEW_APPLICATION_ID}'`)) {
+        throw new Error("AARON_RAIL_PREVIEW: failed to set applicationId in app/build.gradle")
+      }
+      if (!/namespace\s+['"]com\.betterrail['"]/.test(next)) {
+        throw new Error("AARON_RAIL_PREVIEW: namespace must stay com.betterrail")
+      }
+      fs.writeFileSync(gradlePath, next)
+      return cfg
+    },
+  ])
+}
+
+const withAndroidGradle = (config) => withPreviewApplicationId(withProjectGradle(withAppGradle(config)))
 
 module.exports = { withAndroidGradle }
