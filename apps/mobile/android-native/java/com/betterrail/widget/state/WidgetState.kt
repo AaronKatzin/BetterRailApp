@@ -398,10 +398,10 @@ class WidgetStateRenderer(
         views.setViewVisibility(R.id.widget_dot_separator, android.view.View.GONE)
 
         if (isMultiTrainLayout()) {
-            val etaLabelBase = context.getString(R.string.eta_caps)
-            val etaLabel = if (glance.lastLegMinutes > 0) etaLabelBase + " (${glance.lastLegMinutes} min from station)" else etaLabelBase
-            views.setTextViewText(R.id.widget_arrival_label, etaLabel)
-            views.setTextViewText(R.id.widget_arrival_time, TimeFormatUtils.formatForDisplay(context, glance.etaTime))
+            views.setTextViewText(R.id.widget_arrival_label, context.getString(R.string.eta_caps))
+            val etaTimeBase = TimeFormatUtils.formatForDisplay(context, glance.etaTime)
+            val etaTime = if (glance.lastLegMinutes > 0) etaTimeBase + " (${glance.lastLegMinutes} min from station)" else etaTimeBase
+            views.setTextViewText(R.id.widget_arrival_time, etaTime)
         }
 
         if (layoutResource == R.layout.widget_compact_4x3) {
