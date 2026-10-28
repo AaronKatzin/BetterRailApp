@@ -472,6 +472,8 @@ abstract class ModernBaseWidgetProvider : AppWidgetProvider() {
             trainTime = CommutePlanner.formatClock(first.trainDeparture),
             etaTime = CommutePlanner.formatClock(first.eta),
             officeLabel = officeLabel,
+            firstLegMinutes = resolved.firstScooterMinutes,
+            lastLegMinutes = resolved.lastScooterMinutes,
             upcoming = upcoming,
         )
     }
@@ -647,7 +649,16 @@ abstract class ModernBaseWidgetProvider : AppWidgetProvider() {
                             
                             if (widgetData.isCommuteConfigured()) {
                                 setupOfficeToggleClickIntent(context, views, appWidgetId)
-                                setupRouteDeepLinkClickIntent(context, views, appWidgetId, widgetData)
+                                setupRouteReversalClickIntent(context, views, appWidgetId)
+                                setupClickIntentsBase(
+                                    context = context,
+                                    views = views,
+                                    appWidgetId = appWidgetId,
+                                    widgetData = widgetData,
+                                    clickTargetId = getWidgetContainerId(),
+                                    useDeeplink = true,
+                                    deeplinkPath = getWidgetType()
+                                )
                             } else if (widgetData.allowRouteReversal) {
                                 setupRouteReversalClickIntent(context, views, appWidgetId)
                             } else {
@@ -674,7 +685,16 @@ abstract class ModernBaseWidgetProvider : AppWidgetProvider() {
                             
                             if (widgetData.isCommuteConfigured()) {
                                 setupOfficeToggleClickIntent(context, views, appWidgetId)
-                                setupRouteDeepLinkClickIntent(context, views, appWidgetId, widgetData)
+                                setupRouteReversalClickIntent(context, views, appWidgetId)
+                                setupClickIntentsBase(
+                                    context = context,
+                                    views = views,
+                                    appWidgetId = appWidgetId,
+                                    widgetData = widgetData,
+                                    clickTargetId = getWidgetContainerId(),
+                                    useDeeplink = true,
+                                    deeplinkPath = getWidgetType()
+                                )
                             } else if (widgetData.allowRouteReversal) {
                                 setupRouteReversalClickIntent(context, views, appWidgetId)
                             } else {

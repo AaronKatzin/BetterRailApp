@@ -17,6 +17,8 @@ data class CommuteGlance(
     val trainTime: String,
     val etaTime: String,
     val officeLabel: String,
+    val firstLegMinutes: Int,
+    val lastLegMinutes: Int,
     val upcoming: List<CommuteUpcoming> = emptyList(),
     val labelPrefix: String = "",
 )
@@ -383,7 +385,8 @@ class WidgetStateRenderer(
         views.setContentDescription(R.id.widget_office_toggle, context.getString(R.string.switch_office))
 
         val minutes = glance.leaveInMinutes.coerceAtLeast(0)
-        val leaveLabel = context.getString(R.string.leave_in_minutes, minutes)
+        val leaveLabelBase = context.getString(R.string.leave_in_minutes, minutes)
+        val leaveLabel = if (glance.firstLegMinutes > 0) leaveLabelBase + " (${glance.firstLegMinutes} min to station)" else leaveLabelBase
         val label = if (glance.labelPrefix.isEmpty()) leaveLabel else "${glance.labelPrefix} · $leaveLabel"
         views.setTextViewText(R.id.widget_train_label, label)
         views.setTextColor(R.id.widget_train_label, context.getColor(R.color.widget_next_train_text))
@@ -395,7 +398,9 @@ class WidgetStateRenderer(
         views.setViewVisibility(R.id.widget_dot_separator, android.view.View.GONE)
 
         if (isMultiTrainLayout()) {
-            views.setTextViewText(R.id.widget_arrival_label, context.getString(R.string.eta_caps))
+            val etaLabelBase = context.getString(R.string.eta_caps)
+            val etaLabel = if (glance.lastLegMinutes > 0) etaLabelBase + " (${glance.lastLegMinutes} min from station)" else etaLabelBase
+            views.setTextViewText(R.id.widget_arrival_label, etaLabel)
             views.setTextViewText(R.id.widget_arrival_time, TimeFormatUtils.formatForDisplay(context, glance.etaTime))
         }
 

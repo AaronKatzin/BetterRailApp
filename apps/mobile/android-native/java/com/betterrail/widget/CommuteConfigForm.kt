@@ -96,7 +96,9 @@ class CommuteConfigForm(
         val flags = data.weekdayOffices.padEnd(7, 'A')
         for (index in weekdayOffices.indices) {
             weekdayOffices[index] = if (flags[index] == 'B' || flags[index] == 'b') 'B' else 'A'
-            refreshWeekday(index)
+        }
+        for (uiIndex in 0 until 7) {
+            refreshWeekday(uiIndex)
         }
     }
 
@@ -147,34 +149,37 @@ class CommuteConfigForm(
         weekdayButtons.clear()
         val locale = Locale.getDefault()
         val gap = (4 * activity.resources.displayMetrics.density).toInt()
-        DayOfWeek.entries.forEachIndexed { index, day ->
+        val days = listOf(DayOfWeek.SUNDAY) + DayOfWeek.entries.dropLast(1)
+        days.forEachIndexed { uiIndex, day ->
+            val logicalIndex = if (uiIndex == 0) 6 else uiIndex - 1
             val button = TextView(activity).apply {
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                    marginEnd = if (index == 6) 0 else gap
+                    marginEnd = if (uiIndex == 6) 0 else gap
                 }
                 gravity = Gravity.CENTER
                 setPadding(0, 12, 0, 12)
                 textSize = 12f
                 setTextColor(activity.getColor(R.color.label))
                 setOnClickListener {
-                    weekdayOffices[index] = if (weekdayOffices[index] == 'A') 'B' else 'A'
-                    refreshWeekday(index)
+                    weekdayOffices[logicalIndex] = if (weekdayOffices[logicalIndex] == 'A') 'B' else 'A'
+                    refreshWeekday(uiIndex)
                     onChanged()
                 }
                 tag = day.getDisplayName(TextStyle.NARROW, locale)
             }
             weekdayButtons.add(button)
             weekdayRow.addView(button)
-            refreshWeekday(index)
+            refreshWeekday(uiIndex)
         }
     }
 
-    private fun refreshWeekday(index: Int) {
-        val button = weekdayButtons[index]
+    private fun refreshWeekday(uiIndex: Int) {
+        val logicalIndex = if (uiIndex == 0) 6 else uiIndex - 1
+        val button = weekdayButtons[uiIndex]
         val dayLabel = button.tag as String
-        button.text = "$dayLabel\n${weekdayOffices[index]}"
+        button.text = "$dayLabel\n${weekdayOffices[logicalIndex]}"
         button.setBackgroundColor(
-            if (weekdayOffices[index] == 'B') activity.getColor(R.color.lightPinky) else activity.getColor(R.color.lightGrey)
+            if (weekdayOffices[logicalIndex] == 'B') activity.getColor(R.color.lightPinky) else activity.getColor(R.color.lightGrey)
         )
     }
 
