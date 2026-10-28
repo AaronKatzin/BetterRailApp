@@ -25,6 +25,27 @@
     </string-array>
     <string name="widget_auto_reverse_route">Morning/evening auto-reverse</string>
     <string name="widget_auto_reverse_description">Automatically reverses your route in the evening and back in the morning</string>
+    <string name="widget_commute_mode">Home and two offices</string>
+    <string name="widget_commute_description">Shows when to leave. Before 13:00 the train runs toward today’s office. After 13:00 it runs toward home. Tap the office name on the widget to switch office for today.</string>
+    <string name="widget_home_station">Home station</string>
+    <string name="widget_office_a">Office A</string>
+    <string name="widget_office_b">Office B</string>
+    <string name="widget_office_name_hint">Name on the widget</string>
+    <string name="widget_scooter_home_to_station">Home to station, morning (min)</string>
+    <string name="widget_scooter_station_to_home">Station to home, evening (min)</string>
+    <string name="widget_scooter_station_to_office">Station to office, morning (min)</string>
+    <string name="widget_scooter_office_to_station">Office to station, evening (min)</string>
+    <string name="widget_weekdays_title">Which office each weekday</string>
+    <string name="widget_minutes_hint">0</string>
+    <string name="widget_commute_missing">Choose a home station and two different office stations</string>
+    <string name="leave_in_minutes">Leave in %d min</string>
+    <string name="for_the_train">for the %s train</string>
+    <string name="eta_caps">ETA</string>
+    <string name="leave_caps">LEAVE</string>
+    <string name="leave_eta_header">LEAVE · ETA</string>
+    <string name="office_a_name">Office A</string>
+    <string name="office_b_name">Office B</string>
+    <string name="switch_office">Switch office</string>
 
     <!-- Widget display strings -->
     <string name="tap_to_configure">Tap to configure</string>

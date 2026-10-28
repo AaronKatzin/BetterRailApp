@@ -14,6 +14,7 @@ enum class WidgetSize(
     val actionRefresh: String,
     val actionWidgetUpdate: String,
     val actionRouteReversal: String,
+    val actionOfficeToggle: String,
 ) {
     COMPACT_2X2(
         layoutRes = R.layout.widget_compact_2x2,
@@ -23,7 +24,8 @@ enum class WidgetSize(
         configActivity = CompactWidget2x2ConfigActivity::class.java,
         actionRefresh = "com.betterrail.widget.modern.compact.ACTION_REFRESH",
         actionWidgetUpdate = "com.betterrail.widget.modern.compact.ACTION_WIDGET_UPDATE",
-        actionRouteReversal = "com.betterrail.widget.modern.compact.ACTION_ROUTE_REVERSAL"
+        actionRouteReversal = "com.betterrail.widget.modern.compact.ACTION_ROUTE_REVERSAL",
+        actionOfficeToggle = "com.betterrail.widget.modern.compact.ACTION_OFFICE_TOGGLE",
     ),
     COMPACT_4X2(
         layoutRes = R.layout.widget_compact_4x2,
@@ -33,7 +35,8 @@ enum class WidgetSize(
         configActivity = CompactWidget4x2ConfigActivity::class.java,
         actionRefresh = "com.betterrail.widget.modern.compact4x2.ACTION_REFRESH",
         actionWidgetUpdate = "com.betterrail.widget.modern.compact4x2.ACTION_WIDGET_UPDATE",
-        actionRouteReversal = "com.betterrail.widget.modern.compact4x2.ACTION_ROUTE_REVERSAL"
+        actionRouteReversal = "com.betterrail.widget.modern.compact4x2.ACTION_ROUTE_REVERSAL",
+        actionOfficeToggle = "com.betterrail.widget.modern.compact4x2.ACTION_OFFICE_TOGGLE",
     ),
     COMPACT_5X2(
         layoutRes = R.layout.widget_compact_4x2, // Reuse 4x2 layout for now
@@ -43,7 +46,8 @@ enum class WidgetSize(
         configActivity = CompactWidget4x2ConfigActivity::class.java, // Reuse 4x2 config
         actionRefresh = "com.betterrail.widget.modern.compact5x2.ACTION_REFRESH",
         actionWidgetUpdate = "com.betterrail.widget.modern.compact5x2.ACTION_WIDGET_UPDATE",
-        actionRouteReversal = "com.betterrail.widget.modern.compact5x2.ACTION_ROUTE_REVERSAL"
+        actionRouteReversal = "com.betterrail.widget.modern.compact5x2.ACTION_ROUTE_REVERSAL",
+        actionOfficeToggle = "com.betterrail.widget.modern.compact5x2.ACTION_OFFICE_TOGGLE",
     ),
     COMPACT_4X3(
         layoutRes = R.layout.widget_compact_4x3,
@@ -53,7 +57,8 @@ enum class WidgetSize(
         configActivity = CompactWidget4x3ConfigActivity::class.java,
         actionRefresh = "com.betterrail.widget.modern.compact4x3.ACTION_REFRESH",
         actionWidgetUpdate = "com.betterrail.widget.modern.compact4x3.ACTION_WIDGET_UPDATE",
-        actionRouteReversal = "com.betterrail.widget.modern.compact4x3.ACTION_ROUTE_REVERSAL"
+        actionRouteReversal = "com.betterrail.widget.modern.compact4x3.ACTION_ROUTE_REVERSAL",
+        actionOfficeToggle = "com.betterrail.widget.modern.compact4x3.ACTION_OFFICE_TOGGLE",
     );
     
     companion object {

@@ -26,6 +26,27 @@
     </string-array>
     <string name="widget_auto_reverse_route">שינוי כיוון אוטומטי</string>
     <string name="widget_auto_reverse_description">שינוי כיוון בהתאם לשעה (בוקר/ערב)</string>
+    <string name="widget_commute_mode">בית ושני משרדים</string>
+    <string name="widget_commute_description">מציג מתי לצאת. לפני 13:00 הרכבת לכיוון המשרד של היום, ואחרי 13:00 לכיוון הבית. לחיצה על שם המשרד בווידג׳ט מחליפה משרד להיום.</string>
+    <string name="widget_home_station">תחנת הבית</string>
+    <string name="widget_office_a">משרד א׳</string>
+    <string name="widget_office_b">משרד ב׳</string>
+    <string name="widget_office_name_hint">שם על הווידג׳ט</string>
+    <string name="widget_scooter_home_to_station">מהבית לתחנה, בוקר (דק׳)</string>
+    <string name="widget_scooter_station_to_home">מהתחנה הביתה, ערב (דק׳)</string>
+    <string name="widget_scooter_station_to_office">מהתחנה למשרד, בוקר (דק׳)</string>
+    <string name="widget_scooter_office_to_station">מהמשרד לתחנה, ערב (דק׳)</string>
+    <string name="widget_weekdays_title">איזה משרד בכל יום</string>
+    <string name="widget_minutes_hint">0</string>
+    <string name="widget_commute_missing">בחרו תחנת בית ושתי תחנות משרד שונות</string>
+    <string name="leave_in_minutes">צא בעוד %d דק׳</string>
+    <string name="for_the_train">לרכבת %s</string>
+    <string name="eta_caps">הגעה</string>
+    <string name="leave_caps">יציאה</string>
+    <string name="leave_eta_header">יציאה · הגעה</string>
+    <string name="office_a_name">משרד א׳</string>
+    <string name="office_b_name">משרד ב׳</string>
+    <string name="switch_office">החלפת משרד</string>
   
     <!-- Widget display strings -->
     <string name="tap_to_configure">הקש כדי להגדיר</string>

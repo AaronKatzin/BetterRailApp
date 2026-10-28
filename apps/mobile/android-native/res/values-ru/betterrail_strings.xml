@@ -26,6 +26,27 @@
     </string-array>
     <string name="widget_auto_reverse_route">Авто-реверс маршрута</string>
     <string name="widget_auto_reverse_description">Автоматически меняет направление маршрута в зависимости от времени суток</string>
+    <string name="widget_commute_mode">Дом и два офиса</string>
+    <string name="widget_commute_description">Показывает, когда выходить. До 13:00 поезд в сторону сегодняшнего офиса, после 13:00 — домой. Нажмите название офиса на виджете, чтобы сменить офис на сегодня.</string>
+    <string name="widget_home_station">Станция у дома</string>
+    <string name="widget_office_a">Офис A</string>
+    <string name="widget_office_b">Офис B</string>
+    <string name="widget_office_name_hint">Название на виджете</string>
+    <string name="widget_scooter_home_to_station">Дом → станция, утро (мин)</string>
+    <string name="widget_scooter_station_to_home">Станция → дом, вечер (мин)</string>
+    <string name="widget_scooter_station_to_office">Станция → офис, утро (мин)</string>
+    <string name="widget_scooter_office_to_station">Офис → станция, вечер (мин)</string>
+    <string name="widget_weekdays_title">Офис по дням недели</string>
+    <string name="widget_minutes_hint">0</string>
+    <string name="widget_commute_missing">Выберите станцию у дома и две разные станции офисов</string>
+    <string name="leave_in_minutes">Выйти через %d мин</string>
+    <string name="for_the_train">на поезд %s</string>
+    <string name="eta_caps">ПРИБ.</string>
+    <string name="leave_caps">ВЫХОД</string>
+    <string name="leave_eta_header">ВЫХОД · ПРИБ.</string>
+    <string name="office_a_name">Офис A</string>
+    <string name="office_b_name">Офис B</string>
+    <string name="switch_office">Сменить офис</string>
 
     <!-- Widget display strings -->
     <string name="tap_to_configure">Нажмите для настройки</string>

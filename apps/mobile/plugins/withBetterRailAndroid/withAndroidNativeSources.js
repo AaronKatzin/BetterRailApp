@@ -29,6 +29,11 @@ const withAndroidNativeSources = (config) =>
 
       // Kotlin sources
       copyDir(path.join(root, "android-native", "java", "com", "betterrail"), path.join(androidMain, "java", "com", "betterrail"))
+      // JVM unit tests (commute leave-by / office selection). No Android APIs.
+      const testSrc = path.join(root, "android-native", "test")
+      if (fs.existsSync(testSrc)) {
+        copyDir(testSrc, path.join(cfg.modRequest.platformProjectRoot, "app", "src", "test", "java"))
+      }
       // Resources (merged additively into the Expo-generated res/)
       copyDir(path.join(root, "android-native", "res"), path.join(androidMain, "res"))
 

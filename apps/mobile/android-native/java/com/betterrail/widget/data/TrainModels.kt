@@ -106,7 +106,10 @@ data class WidgetTrainItem(
     val duration: String = "",
     val changesText: String = "",
     val trainNumber: String = "",
-    val departureTimestamp: String = "" // Full ISO timestamp for date calculations
+    val departureTimestamp: String = "", // Full ISO timestamp for date calculations
+    val arrivalTimestamp: String = "",
+    /** Delay of the last train in the trip. Falls back to [delay] when the API has no separate arrival time. */
+    val arrivalDelay: Int = 0,
 ) {
     fun hasPlatform(): Boolean = platform.isNotEmpty() && platform != "0"
 
@@ -143,7 +146,24 @@ data class WidgetData(
     val allowRouteReversal: Boolean = true,
     val autoReverseRoute: Boolean = false,
     val manualOverrideUntil: Long = 0,
-    val maxChanges: Int? = null // null = no limit, 0 = direct only, 1 = up to 1 change
+    val maxChanges: Int? = null, // null = no limit, 0 = direct only, 1 = up to 1 change
+    val commuteEnabled: Boolean = false,
+    val homeStationId: String = "",
+    val officeAStationId: String = "",
+    val officeBStationId: String = "",
+    val officeALabel: String = "",
+    val officeBLabel: String = "",
+    val scooterHomeToStation: Int = 0,
+    val scooterStationToHome: Int = 0,
+    val scooterAStationToOffice: Int = 0,
+    val scooterAOfficeToStation: Int = 0,
+    val scooterBStationToOffice: Int = 0,
+    val scooterBOfficeToStation: Int = 0,
+    /** Monday-first, seven A/B characters. */
+    val weekdayOffices: String = "AAAAAAA",
+    /** "A", "B", or empty. Applies only on [officeOverrideDate]. */
+    val officeOverride: String = "",
+    val officeOverrideDate: String = "",
 )
 
 // API Error response
