@@ -27,3 +27,46 @@ index d6019f61c32172db04eeecb85d87d4ef506ee8e6..8259247038862e6e1ee55562a0482af7
          }
      }
  }
+diff --git a/android/src/main/java/com/dieam/reactnativepushnotification/modules/RNPushNotification.java b/android/src/main/java/com/dieam/reactnativepushnotification/modules/RNPushNotification.java
+index bb1bb13f3609804c700300fc82a9db44d3d82dd6..10c926c44955c4d0fb8303e9112dfd6d9d15024b 100644
+--- a/android/src/main/java/com/dieam/reactnativepushnotification/modules/RNPushNotification.java
++++ b/android/src/main/java/com/dieam/reactnativepushnotification/modules/RNPushNotification.java
+@@ -137,20 +137,24 @@ public class RNPushNotification extends ReactContextBaseJavaModule implements Ac
+     public void requestPermissions() {
+       final RNPushNotificationJsDelivery fMjsDelivery = mJsDelivery;
+
+-      FirebaseMessaging.getInstance().getToken()
+-              .addOnCompleteListener(new OnCompleteListener<String>() {
+-                  @Override
+-                  public void onComplete(@NonNull Task<String> task) {
+-                      if (!task.isSuccessful()) {
+-                          Log.e(LOG_TAG, "exception", task.getException());
+-                          return;
+-                      }
+-
+-                      WritableMap params = Arguments.createMap();
+-                      params.putString("deviceToken", task.getResult());
+-                      fMjsDelivery.sendEvent("remoteNotificationsRegistered", params);
+-                  }
+-              });
++      try {
++          FirebaseMessaging.getInstance().getToken()
++                  .addOnCompleteListener(new OnCompleteListener<String>() {
++                      @Override
++                      public void onComplete(@NonNull Task<String> task) {
++                          if (!task.isSuccessful()) {
++                              Log.e(LOG_TAG, "exception", task.getException());
++                              return;
++                          }
++
++                          WritableMap params = Arguments.createMap();
++                          params.putString("deviceToken", task.getResult());
++                          fMjsDelivery.sendEvent("remoteNotificationsRegistered", params);
++                      }
++                  });
++      } catch (IllegalStateException e) {
++          Log.w(LOG_TAG, "Firebase not initialized, skipping push token request");
++      }
+     }
+
+     @ReactMethod

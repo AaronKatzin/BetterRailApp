@@ -16,6 +16,12 @@ const IS_E2E = process.env.EXPO_PUBLIC_E2E === "true"
 const APP_GROUP = "group.il.co.better-rail"
 const APPLE_TEAM_ID = "UE6BVYPPFX"
 const IOS_BUNDLE_ID = "il.co.better-rail"
+// Fork-only sideload preview. Unset for every upstream/default build.
+// AARON_RAIL_PREVIEW=1 installs a separate app ("Aaron Rail") next to the Play
+// Store Better Rail. android.package stays com.betterrail: Expo uses it as the
+// AGP namespace, and the widget classes live in that package. The preview
+// applicationId (com.aaronkatzin.rail) is applied later in withAndroidGradle.
+const AARON_RAIL_PREVIEW = process.env.AARON_RAIL_PREVIEW === "1"
 const ANDROID_PACKAGE = "com.betterrail"
 const IOS_SUPPORTED_LOCALES = ["en", "he", "ar", "ru"]
 
@@ -58,7 +64,7 @@ const HEEBO_FONT_ANDROID = {
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: "Better Rail",
+  name: AARON_RAIL_PREVIEW ? "Aaron Rail" : "Better Rail",
   slug: "better-rail",
   owner: "better-rail",
   version: "2.8.9",
@@ -76,7 +82,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   icon: "./assets/icons/ios-icon-light.png",
   // App URL scheme + the schemes the app responds to (widget://, liveactivity://)
   // Note: schemes must be lowercase to pass EAS Update manifest validation.
-  scheme: ["betterrail", "widget", "liveactivity"],
+  // Preview drops betterrail://, widget://, and liveactivity:// so those stay with the official app.
+  scheme: AARON_RAIL_PREVIEW ? ["aaronrail"] : ["betterrail", "widget", "liveactivity"],
   jsEngine: "hermes",
   assetBundlePatterns: ["**/*"],
 
@@ -135,9 +142,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     versionCode: 157,
     // Prod JSON is git-ignored, so on EAS it comes from a file secret (GOOGLE_SERVICES_JSON);
     // falls back to the local path for on-machine prod prebuilds.
-    googleServicesFile: IS_DEV
-      ? "./google-services.development.json"
-      : (process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json"),
+    // google-services.json only lists com.betterrail. The preview skips it; the widget
+    // timetable uses the rail API, not Firebase.
+    ...(AARON_RAIL_PREVIEW
+      ? {}
+      : {
+          googleServicesFile: IS_DEV
+            ? "./google-services.development.json"
+            : (process.env.GOOGLE_SERVICES_JSON ?? "./google-services.json"),
+        }),
     allowBackup: false,
     // Widget network calls / local dev (replaces the original network_security_config.xml).
     usesCleartextTraffic: true,
@@ -161,22 +174,31 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "android.permission.READ_CALENDAR",
       "android.permission.WRITE_CALENDAR",
     ],
-    intentFilters: [
-      {
-        action: "VIEW",
-        category: ["DEFAULT", "BROWSABLE"],
-        data: [{ scheme: "betterrail" }],
-      },
-      {
-        action: "VIEW",
-        autoVerify: true,
-        category: ["DEFAULT", "BROWSABLE"],
-        data: [
-          { scheme: "https", host: "better-rail.co.il", pathPrefix: "/routes/" },
-          { scheme: "https", host: "better-rail.co.il", pathPrefix: "/en/routes/" },
+    // Preview does not claim betterrail:// or the better-rail.co.il App Links.
+    intentFilters: AARON_RAIL_PREVIEW
+      ? [
+          {
+            action: "VIEW",
+            category: ["DEFAULT", "BROWSABLE"],
+            data: [{ scheme: "aaronrail" }],
+          },
+        ]
+      : [
+          {
+            action: "VIEW",
+            category: ["DEFAULT", "BROWSABLE"],
+            data: [{ scheme: "betterrail" }],
+          },
+          {
+            action: "VIEW",
+            autoVerify: true,
+            category: ["DEFAULT", "BROWSABLE"],
+            data: [
+              { scheme: "https", host: "better-rail.co.il", pathPrefix: "/routes/" },
+              { scheme: "https", host: "better-rail.co.il", pathPrefix: "/en/routes/" },
+            ],
+          },
         ],
-      },
-    ],
   },
 
   plugins: [

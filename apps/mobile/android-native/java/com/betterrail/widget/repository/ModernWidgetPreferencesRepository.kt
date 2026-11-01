@@ -39,6 +39,111 @@ class ModernWidgetPreferencesRepository @Inject constructor(
         private fun autoReverseRouteKey(widgetId: Int) = booleanPreferencesKey("auto_reverse_route_$widgetId")
         private fun manualOverrideUntilKey(widgetId: Int) = longPreferencesKey("manual_override_until_$widgetId")
         private fun maxChangesKey(widgetId: Int) = intPreferencesKey("max_changes_$widgetId")
+        private fun commuteEnabledKey(widgetId: Int) = booleanPreferencesKey("commute_enabled_$widgetId")
+        private fun homeStationIdKey(widgetId: Int) = stringPreferencesKey("home_station_id_$widgetId")
+        private fun officeAStationIdKey(widgetId: Int) = stringPreferencesKey("office_a_station_id_$widgetId")
+        private fun officeBStationIdKey(widgetId: Int) = stringPreferencesKey("office_b_station_id_$widgetId")
+        private fun officeALabelKey(widgetId: Int) = stringPreferencesKey("office_a_label_$widgetId")
+        private fun officeBLabelKey(widgetId: Int) = stringPreferencesKey("office_b_label_$widgetId")
+        private fun scooterHomeToStationKey(widgetId: Int) = intPreferencesKey("scooter_home_to_station_$widgetId")
+        private fun scooterStationToHomeKey(widgetId: Int) = intPreferencesKey("scooter_station_to_home_$widgetId")
+        private fun scooterAStationToOfficeKey(widgetId: Int) = intPreferencesKey("scooter_a_station_to_office_$widgetId")
+        private fun scooterAOfficeToStationKey(widgetId: Int) = intPreferencesKey("scooter_a_office_to_station_$widgetId")
+        private fun scooterBStationToOfficeKey(widgetId: Int) = intPreferencesKey("scooter_b_station_to_office_$widgetId")
+        private fun scooterBOfficeToStationKey(widgetId: Int) = intPreferencesKey("scooter_b_office_to_station_$widgetId")
+        private fun weekdayOfficesKey(widgetId: Int) = stringPreferencesKey("weekday_offices_$widgetId")
+        private fun officeOverrideKey(widgetId: Int) = stringPreferencesKey("office_override_$widgetId")
+        private fun officeOverrideDateKey(widgetId: Int) = stringPreferencesKey("office_override_date_$widgetId")
+    }
+
+    private fun readWidget(preferences: Preferences, widgetId: Int): WidgetData? {
+        val originId = preferences[originIdKey(widgetId)] ?: ""
+        val destinationId = preferences[destinationIdKey(widgetId)] ?: ""
+        if (originId.isEmpty() || destinationId.isEmpty()) return null
+        return WidgetData(
+            originId = originId,
+            destinationId = destinationId,
+            originName = preferences[originNameKey(widgetId)] ?: "",
+            destinationName = preferences[destinationNameKey(widgetId)] ?: "",
+            label = preferences[labelKey(widgetId)] ?: "",
+            allowRouteReversal = preferences[allowRouteReversalKey(widgetId)] ?: false,
+            autoReverseRoute = preferences[autoReverseRouteKey(widgetId)] ?: false,
+            manualOverrideUntil = preferences[manualOverrideUntilKey(widgetId)] ?: 0,
+            maxChanges = preferences[maxChangesKey(widgetId)],
+            commuteEnabled = preferences[commuteEnabledKey(widgetId)] ?: false,
+            homeStationId = preferences[homeStationIdKey(widgetId)] ?: "",
+            officeAStationId = preferences[officeAStationIdKey(widgetId)] ?: "",
+            officeBStationId = preferences[officeBStationIdKey(widgetId)] ?: "",
+            officeALabel = preferences[officeALabelKey(widgetId)] ?: "",
+            officeBLabel = preferences[officeBLabelKey(widgetId)] ?: "",
+            scooterHomeToStation = preferences[scooterHomeToStationKey(widgetId)] ?: 0,
+            scooterStationToHome = preferences[scooterStationToHomeKey(widgetId)] ?: 0,
+            scooterAStationToOffice = preferences[scooterAStationToOfficeKey(widgetId)] ?: 0,
+            scooterAOfficeToStation = preferences[scooterAOfficeToStationKey(widgetId)] ?: 0,
+            scooterBStationToOffice = preferences[scooterBStationToOfficeKey(widgetId)] ?: 0,
+            scooterBOfficeToStation = preferences[scooterBOfficeToStationKey(widgetId)] ?: 0,
+            weekdayOffices = preferences[weekdayOfficesKey(widgetId)] ?: "AAAAAAA",
+            officeOverride = preferences[officeOverrideKey(widgetId)] ?: "",
+            officeOverrideDate = preferences[officeOverrideDateKey(widgetId)] ?: "",
+        )
+    }
+
+    private fun writeWidget(preferences: MutablePreferences, widgetId: Int, widgetData: WidgetData) {
+        preferences[originIdKey(widgetId)] = widgetData.originId
+        preferences[destinationIdKey(widgetId)] = widgetData.destinationId
+        preferences[originNameKey(widgetId)] = widgetData.originName
+        preferences[destinationNameKey(widgetId)] = widgetData.destinationName
+        preferences[labelKey(widgetId)] = widgetData.label
+        preferences[allowRouteReversalKey(widgetId)] = widgetData.allowRouteReversal
+        preferences[autoReverseRouteKey(widgetId)] = widgetData.autoReverseRoute
+        preferences[manualOverrideUntilKey(widgetId)] = widgetData.manualOverrideUntil
+        if (widgetData.maxChanges != null) {
+            preferences[maxChangesKey(widgetId)] = widgetData.maxChanges
+        } else {
+            preferences.remove(maxChangesKey(widgetId))
+        }
+        preferences[commuteEnabledKey(widgetId)] = widgetData.commuteEnabled
+        preferences[homeStationIdKey(widgetId)] = widgetData.homeStationId
+        preferences[officeAStationIdKey(widgetId)] = widgetData.officeAStationId
+        preferences[officeBStationIdKey(widgetId)] = widgetData.officeBStationId
+        preferences[officeALabelKey(widgetId)] = widgetData.officeALabel
+        preferences[officeBLabelKey(widgetId)] = widgetData.officeBLabel
+        preferences[scooterHomeToStationKey(widgetId)] = widgetData.scooterHomeToStation
+        preferences[scooterStationToHomeKey(widgetId)] = widgetData.scooterStationToHome
+        preferences[scooterAStationToOfficeKey(widgetId)] = widgetData.scooterAStationToOffice
+        preferences[scooterAOfficeToStationKey(widgetId)] = widgetData.scooterAOfficeToStation
+        preferences[scooterBStationToOfficeKey(widgetId)] = widgetData.scooterBStationToOffice
+        preferences[scooterBOfficeToStationKey(widgetId)] = widgetData.scooterBOfficeToStation
+        preferences[weekdayOfficesKey(widgetId)] = widgetData.weekdayOffices
+        preferences[officeOverrideKey(widgetId)] = widgetData.officeOverride
+        preferences[officeOverrideDateKey(widgetId)] = widgetData.officeOverrideDate
+    }
+
+    private fun removeWidget(preferences: MutablePreferences, widgetId: Int) {
+        preferences.remove(originIdKey(widgetId))
+        preferences.remove(destinationIdKey(widgetId))
+        preferences.remove(originNameKey(widgetId))
+        preferences.remove(destinationNameKey(widgetId))
+        preferences.remove(labelKey(widgetId))
+        preferences.remove(allowRouteReversalKey(widgetId))
+        preferences.remove(autoReverseRouteKey(widgetId))
+        preferences.remove(manualOverrideUntilKey(widgetId))
+        preferences.remove(maxChangesKey(widgetId))
+        preferences.remove(commuteEnabledKey(widgetId))
+        preferences.remove(homeStationIdKey(widgetId))
+        preferences.remove(officeAStationIdKey(widgetId))
+        preferences.remove(officeBStationIdKey(widgetId))
+        preferences.remove(officeALabelKey(widgetId))
+        preferences.remove(officeBLabelKey(widgetId))
+        preferences.remove(scooterHomeToStationKey(widgetId))
+        preferences.remove(scooterStationToHomeKey(widgetId))
+        preferences.remove(scooterAStationToOfficeKey(widgetId))
+        preferences.remove(scooterAOfficeToStationKey(widgetId))
+        preferences.remove(scooterBStationToOfficeKey(widgetId))
+        preferences.remove(scooterBOfficeToStationKey(widgetId))
+        preferences.remove(weekdayOfficesKey(widgetId))
+        preferences.remove(officeOverrideKey(widgetId))
+        preferences.remove(officeOverrideDateKey(widgetId))
     }
 
     private val dataStore = context.dataStore
@@ -54,25 +159,7 @@ class ModernWidgetPreferencesRepository @Inject constructor(
             }
             .map { preferences ->
                 try {
-                    val originId = preferences[originIdKey(widgetId)] ?: ""
-                    val destinationId = preferences[destinationIdKey(widgetId)] ?: ""
-                    
-                    // Return null if widget is not configured
-                    if (originId.isEmpty() || destinationId.isEmpty()) {
-                        null
-                    } else {
-                        WidgetData(
-                            originId = originId,
-                            destinationId = destinationId,
-                            originName = preferences[originNameKey(widgetId)] ?: "",
-                            destinationName = preferences[destinationNameKey(widgetId)] ?: "",
-                            label = preferences[labelKey(widgetId)] ?: "",
-                            allowRouteReversal = preferences[allowRouteReversalKey(widgetId)] ?: false,
-                            autoReverseRoute = preferences[autoReverseRouteKey(widgetId)] ?: false,
-                            manualOverrideUntil = preferences[manualOverrideUntilKey(widgetId)] ?: 0,
-                            maxChanges = preferences[maxChangesKey(widgetId)] // null = no limit
-                        )
-                    }
+                    readWidget(preferences, widgetId)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error parsing widget data for $widgetId", e)
                     null
@@ -100,21 +187,7 @@ class ModernWidgetPreferencesRepository @Inject constructor(
             Log.d(TAG, "Saving widget data for $widgetId: ${widgetData.originName} -> ${widgetData.destinationName}")
             
             dataStore.edit { preferences ->
-                preferences[originIdKey(widgetId)] = widgetData.originId
-                preferences[destinationIdKey(widgetId)] = widgetData.destinationId
-                preferences[originNameKey(widgetId)] = widgetData.originName
-                preferences[destinationNameKey(widgetId)] = widgetData.destinationName
-                preferences[labelKey(widgetId)] = widgetData.label
-                preferences[allowRouteReversalKey(widgetId)] = widgetData.allowRouteReversal
-                preferences[autoReverseRouteKey(widgetId)] = widgetData.autoReverseRoute
-                preferences[manualOverrideUntilKey(widgetId)] = widgetData.manualOverrideUntil
-
-                // Store maxChanges, or remove if null (no limit)
-                if (widgetData.maxChanges != null) {
-                    preferences[maxChangesKey(widgetId)] = widgetData.maxChanges
-                } else {
-                    preferences.remove(maxChangesKey(widgetId))
-                }
+                writeWidget(preferences, widgetId, widgetData)
             }
             
             Log.d(TAG, "Successfully saved widget data for $widgetId")
@@ -132,15 +205,7 @@ class ModernWidgetPreferencesRepository @Inject constructor(
             Log.d(TAG, "Deleting widget data for $widgetId")
             
             dataStore.edit { preferences ->
-                preferences.remove(originIdKey(widgetId))
-                preferences.remove(destinationIdKey(widgetId))
-                preferences.remove(originNameKey(widgetId))
-                preferences.remove(destinationNameKey(widgetId))
-                preferences.remove(labelKey(widgetId))
-                preferences.remove(allowRouteReversalKey(widgetId))
-                preferences.remove(autoReverseRouteKey(widgetId))
-                preferences.remove(manualOverrideUntilKey(widgetId))
-                preferences.remove(maxChangesKey(widgetId))
+                removeWidget(preferences, widgetId)
             }
             
             Log.d(TAG, "Successfully deleted widget data for $widgetId")
@@ -185,25 +250,7 @@ class ModernWidgetPreferencesRepository @Inject constructor(
                         }
                     
                     widgetIds.mapNotNull { widgetId ->
-                        val originId = preferences[originIdKey(widgetId)] ?: ""
-                        val destinationId = preferences[destinationIdKey(widgetId)] ?: ""
-                        
-                        if (originId.isNotEmpty() && destinationId.isNotEmpty()) {
-                            val widgetData = WidgetData(
-                                originId = originId,
-                                destinationId = destinationId,
-                                originName = preferences[originNameKey(widgetId)] ?: "",
-                                destinationName = preferences[destinationNameKey(widgetId)] ?: "",
-                                label = preferences[labelKey(widgetId)] ?: "",
-                                allowRouteReversal = preferences[allowRouteReversalKey(widgetId)] ?: false,
-                                autoReverseRoute = preferences[autoReverseRouteKey(widgetId)] ?: false,
-                                manualOverrideUntil = preferences[manualOverrideUntilKey(widgetId)] ?: 0,
-                                maxChanges = preferences[maxChangesKey(widgetId)]
-                            )
-                            widgetId to widgetData
-                        } else {
-                            null
-                        }
+                        readWidget(preferences, widgetId)?.let { widgetId to it }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error parsing all widgets", e)
@@ -226,15 +273,7 @@ class ModernWidgetPreferencesRepository @Inject constructor(
                 allStoredIds.forEach { storedId ->
                     if (storedId !in validIds) {
                         Log.d(TAG, "Removing orphaned widget data for ID: $storedId")
-                        preferences.remove(originIdKey(storedId))
-                        preferences.remove(destinationIdKey(storedId))
-                        preferences.remove(originNameKey(storedId))
-                        preferences.remove(destinationNameKey(storedId))
-                        preferences.remove(labelKey(storedId))
-                        preferences.remove(allowRouteReversalKey(storedId))
-                        preferences.remove(autoReverseRouteKey(storedId))
-                        preferences.remove(manualOverrideUntilKey(storedId))
-                        preferences.remove(maxChangesKey(storedId))
+                        removeWidget(preferences, storedId)
                     }
                 }
             }

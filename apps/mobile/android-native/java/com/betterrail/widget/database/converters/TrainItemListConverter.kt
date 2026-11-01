@@ -2,6 +2,7 @@ package com.betterrail.widget.database.converters
 
 import androidx.room.TypeConverter
 import com.google.gson.Gson
+import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
 import com.betterrail.widget.data.WidgetTrainItem
 
@@ -18,7 +19,21 @@ class TrainItemListConverter {
 
     @TypeConverter
     fun toTrainItemList(trainItemsString: String): List<WidgetTrainItem> {
-        val type = object : TypeToken<List<WidgetTrainItem>>() {}.type
-        return gson.fromJson(trainItemsString, type) ?: emptyList()
+        return try {
+            val array = JsonParser.parseString(trainItemsString).asJsonArray
+            array.map { element ->
+                val obj = element.asJsonObject
+                if (!obj.has("arrivalTimestamp") || obj.get("arrivalTimestamp").isJsonNull) {
+                    obj.addProperty("arrivalTimestamp", "")
+                }
+                if (!obj.has("arrivalDelay") || obj.get("arrivalDelay").isJsonNull) {
+                    obj.addProperty("arrivalDelay", 0)
+                }
+                gson.fromJson(obj, WidgetTrainItem::class.java)
+            }
+        } catch (_: Exception) {
+            val type = object : TypeToken<List<WidgetTrainItem>>() {}.type
+            gson.fromJson(trainItemsString, type) ?: emptyList()
+        }
     }
 }

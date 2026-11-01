@@ -75,6 +75,25 @@
                 android:shadowDy="2"
                 android:shadowRadius="4" />
 
+            <TextView
+                android:id="@+id/widget_office_toggle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/widget_office_chip"
+                android:ellipsize="end"
+                android:fontFamily="@font/heebo_bold"
+                android:maxLines="1"
+                android:maxWidth="84dp"
+                android:paddingStart="8dp"
+                android:paddingTop="2dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="2dp"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
         </LinearLayout>
 
         <!-- Middle - Next Train Info -->

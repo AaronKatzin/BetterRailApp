@@ -56,7 +56,7 @@ export async function trackInstalledWidgets() {
 export function getWidgetFamilyFromURL(url: string): string | undefined {
   const { family } = extractURLParams(url)
   if (family) return family
-  const host = url.match(/^betterrail:\/\/(\w+)/i)?.[1].toLowerCase()
+  const host = url.match(/^(?:betterrail|aaronrail):\/\/(\w+)/i)?.[1].toLowerCase()
   return host ? ANDROID_WIDGET_TYPE_FAMILIES[host] : undefined
 }
 

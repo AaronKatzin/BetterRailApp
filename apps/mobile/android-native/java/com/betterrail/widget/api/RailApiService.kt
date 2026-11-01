@@ -25,6 +25,8 @@ class RailApiService(
     companion object {
         private const val MAX_RETRIES = 3
         private const val MINUTES_IN_HOUR = 60
+        /** Keep recently departed trains so a live delay can still produce a future leave-by. */
+        private const val DEPARTED_GRACE_MINUTES = 120
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         private val TIME_FORMAT = SimpleDateFormat("HH:mm", Locale.getDefault())
     }
@@ -258,7 +260,9 @@ class RailApiService(
                 duration = calculateDuration(departureTime, arrivalTime),
                 changesText = formatChangesText(trainDetails.numberOfChanges),
                 trainNumber = trainDetails.trainNumber,
-                departureTimestamp = departureTime
+                departureTimestamp = departureTime,
+                arrivalTimestamp = arrivalTime,
+                arrivalDelay = trainDetails.arrivalDelay,
             )
         } catch (e: Exception) {
             android.util.Log.e("RailApiService", "Failed to parse travel $index: ${e.message}", e)
@@ -272,6 +276,7 @@ class RailApiService(
     private data class TrainDetails(
         val platform: String,
         val delay: Int,
+        val arrivalDelay: Int,
         val trainNumber: String,
         val isExchange: Boolean,
         val numberOfChanges: Int
@@ -288,18 +293,22 @@ class RailApiService(
 
         return if (trains != null && trains.size() > 0) {
             val firstTrain = trains.get(0).asJsonObject
+            val lastTrain = trains.get(trains.size() - 1).asJsonObject
             TrainDetails(
                 platform = firstTrain.get("originPlatform")?.asString
                     ?: firstTrain.get("Platform")?.asString ?: "1",
                 delay = extractDelay(firstTrain, travel),
+                arrivalDelay = extractDelay(lastTrain, travel),
                 trainNumber = extractTrainNumber(firstTrain, travel),
                 isExchange = isExchange,
                 numberOfChanges = numberOfChanges
             )
         } else {
+            val travelDelay = travel.get("Delay")?.asInt ?: 0
             TrainDetails(
                 platform = travel.get("platform")?.asString ?: "1",
-                delay = travel.get("Delay")?.asInt ?: 0,
+                delay = travelDelay,
+                arrivalDelay = travelDelay,
                 trainNumber = travel.get("trainNumber")?.asString ?: "",
                 isExchange = isExchange,
                 numberOfChanges = numberOfChanges
@@ -383,9 +392,9 @@ class RailApiService(
                 val currentMinutes = currentHour * MINUTES_IN_HOUR + currentMinute
                 val departureMinutes = departureHour * MINUTES_IN_HOUR + departureMinute
                 
-                // Simple time comparison: train is upcoming if departure time >= current time
-                // Cross-day handling is now done properly by the widget using full ISO timestamps
-                val isUpcoming = departureMinutes >= currentMinutes
+                // Keep a short grace window so a delayed train whose scheduled time
+                // has passed can still be turned into a future leave-by on device.
+                val isUpcoming = departureMinutes + DEPARTED_GRACE_MINUTES >= currentMinutes
                 
                 android.util.Log.d("RailApiService", "Current: ${currentMinutes}min, Departure: ${departureMinutes}min, Upcoming: $isUpcoming")
                 

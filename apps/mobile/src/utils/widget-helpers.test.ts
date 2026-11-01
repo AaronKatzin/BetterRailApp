@@ -71,6 +71,7 @@ describe("getWidgetFamilyFromURL", () => {
     expect(getWidgetFamilyFromURL("betterrail://modern_widget2x2?originId=4600&destinationId=680")).toBe("compact")
     expect(getWidgetFamilyFromURL("betterrail://modern_widget4x2?originId=4600&destinationId=680")).toBe("wide")
     expect(getWidgetFamilyFromURL("betterrail://modern_widget4x3?originId=4600&destinationId=680")).toBe("large")
+    expect(getWidgetFamilyFromURL("aaronrail://modern_widget2x2?originId=4600&destinationId=680")).toBe("compact")
   })
 
   test("is undefined for links from builds that don't send a family", () => {

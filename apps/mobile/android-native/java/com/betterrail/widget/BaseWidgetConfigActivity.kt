@@ -44,6 +44,8 @@ abstract class BaseWidgetConfigActivity : AppCompatActivity() {
     protected lateinit var advancedHeader: android.view.View
     protected lateinit var advancedChevron: TextView
     protected lateinit var advancedOptionsContainer: android.view.View
+    private lateinit var singleRouteSection: android.view.View
+    private lateinit var commuteForm: CommuteConfigForm
     
     protected var appWidgetId = AppWidgetManager.INVALID_APPWIDGET_ID
     protected lateinit var stationAdapter: ArrayAdapter<String>
@@ -197,6 +199,11 @@ abstract class BaseWidgetConfigActivity : AppCompatActivity() {
         // Set adapters
         originSearch.setAdapter(stationAdapter)
         destinationSearch.setAdapter(stationAdapter)
+
+        singleRouteSection = findViewById(R.id.single_route_section)
+        commuteForm = CommuteConfigForm(this, stationIds, stationNames, stationAdapter)
+        commuteForm.bind { updateAddButtonState() }
+        updateAddButtonState()
         
         // Configure AutoCompleteTextView to show all items when empty
         originSearch.threshold = 0
@@ -346,10 +353,22 @@ abstract class BaseWidgetConfigActivity : AppCompatActivity() {
     }
     
     private fun updateAddButtonState() {
+        if (!this::commuteForm.isInitialized) return
+        if (commuteForm.enabled) {
+            singleRouteSection.visibility = android.view.View.GONE
+            routeReversalCheckbox.visibility = android.view.View.GONE
+            autoReverseRouteCheckbox.isEnabled = false
+            autoReverseRouteCheckbox.isChecked = true
+            addButton.isEnabled = commuteForm.isValid()
+            return
+        }
+
+        singleRouteSection.visibility = android.view.View.VISIBLE
+        routeReversalCheckbox.visibility = android.view.View.VISIBLE
+        autoReverseRouteCheckbox.isEnabled = true
         val originSelected = selectedOriginId.isNotEmpty()
         val destinationSelected = selectedDestinationId.isNotEmpty()
         val differentStations = selectedOriginId != selectedDestinationId
-        
         addButton.isEnabled = originSelected && destinationSelected && differentStations
     }
     
@@ -390,13 +409,17 @@ abstract class BaseWidgetConfigActivity : AppCompatActivity() {
         val originIndex = stationIds.indexOf(originId)
         val destinationIndex = stationIds.indexOf(destinationId)
 
-        if (originIndex >= 0) {
-            selectedOriginId = originId
-            originSearch.setText(stationNames[originIndex], false)
-        }
-        if (destinationIndex >= 0) {
-            selectedDestinationId = destinationId
-            destinationSearch.setText(stationNames[destinationIndex], false)
+        if (commuteForm.enabled) {
+            commuteForm.prefill(originId, destinationId)
+        } else {
+            if (originIndex >= 0) {
+                selectedOriginId = originId
+                originSearch.setText(stationNames[originIndex], false)
+            }
+            if (destinationIndex >= 0) {
+                selectedDestinationId = destinationId
+                destinationSearch.setText(stationNames[destinationIndex], false)
+            }
         }
 
         updateAddButtonState()
@@ -406,6 +429,7 @@ abstract class BaseWidgetConfigActivity : AppCompatActivity() {
      * Load existing widget data for reconfiguration
      */
     private fun loadExistingWidgetData(data: WidgetData) {
+        commuteForm.load(data)
         selectedOriginId = data.originId
         selectedDestinationId = data.destinationId
 
@@ -443,22 +467,26 @@ abstract class BaseWidgetConfigActivity : AppCompatActivity() {
         try {
             Log.d(getLogTag(), "Add button clicked for widget $appWidgetId")
             
-            if (selectedOriginId.isEmpty() || selectedDestinationId.isEmpty()) {
+            if (commuteForm.enabled && !commuteForm.isValid()) {
+                Toast.makeText(this, R.string.widget_commute_missing, Toast.LENGTH_SHORT).show()
+                return
+            }
+            if (!commuteForm.enabled && (selectedOriginId.isEmpty() || selectedDestinationId.isEmpty())) {
                 Toast.makeText(this, "Please select both origin and destination stations", Toast.LENGTH_SHORT).show()
                 return
             }
             
-            if (selectedOriginId == selectedDestinationId) {
+            if (!commuteForm.enabled && selectedOriginId == selectedDestinationId) {
                 Toast.makeText(this, "Origin and destination must be different", Toast.LENGTH_SHORT).show()
                 return
             }
             
-            val originId = selectedOriginId
-            val destinationId = selectedDestinationId
-            val originName = originSearch.text.toString()
-            val destinationName = destinationSearch.text.toString()
+            val originId = if (commuteForm.enabled) commuteForm.homeId else selectedOriginId
+            val destinationId = if (commuteForm.enabled) commuteForm.officeAId else selectedDestinationId
+            val originName = if (commuteForm.enabled) "" else originSearch.text.toString()
+            val destinationName = if (commuteForm.enabled) "" else destinationSearch.text.toString()
             
-            Log.d(getLogTag(), "Saving widget data: $originName -> $destinationName")
+            Log.d(getLogTag(), "Saving widget data: $originName -> $destinationName commute=${commuteForm.enabled}")
             
             // Use coroutine for async operations
             CoroutineScope(Dispatchers.Main).launch {
@@ -468,28 +496,45 @@ abstract class BaseWidgetConfigActivity : AppCompatActivity() {
 
                     // Check if this is a route or filter change for existing widget
                     val existingWidgetData = preferencesRepository.getWidgetData(appWidgetId)
+                    val widgetData = if (commuteForm.enabled) {
+                        commuteForm.applyTo(
+                            WidgetData(
+                                allowRouteReversal = false,
+                                autoReverseRoute = true,
+                                manualOverrideUntil = 0,
+                                maxChanges = maxChanges,
+                            )
+                        )
+                    } else {
+                        WidgetData(
+                            originId = originId,
+                            destinationId = destinationId,
+                            originName = "", // Don't store localized names - look them up dynamically
+                            destinationName = "", // Don't store localized names - look them up dynamically
+                            label = "",
+                            allowRouteReversal = routeReversalCheckbox.isChecked,
+                            autoReverseRoute = autoReverseRouteCheckbox.isChecked,
+                            manualOverrideUntil = 0, // Reset override on configuration change
+                            maxChanges = maxChanges,
+                        )
+                    }
+
                     val isRouteChange = existingWidgetData != null &&
-                                       (existingWidgetData.originId != originId || existingWidgetData.destinationId != destinationId)
-                    val isFilterChange = existingWidgetData != null && 
-                                       (existingWidgetData.maxChanges != maxChanges || 
-                                        existingWidgetData.autoReverseRoute != autoReverseRouteCheckbox.isChecked)
+                                       (existingWidgetData.originId != widgetData.originId ||
+                                        existingWidgetData.destinationId != widgetData.destinationId ||
+                                        existingWidgetData.homeStationId != widgetData.homeStationId ||
+                                        existingWidgetData.officeAStationId != widgetData.officeAStationId ||
+                                        existingWidgetData.officeBStationId != widgetData.officeBStationId ||
+                                        existingWidgetData.weekdayOffices != widgetData.weekdayOffices ||
+                                        existingWidgetData.commuteEnabled != widgetData.commuteEnabled)
+                    val isFilterChange = existingWidgetData != null &&
+                                       (existingWidgetData.maxChanges != maxChanges ||
+                                        existingWidgetData.autoReverseRoute != widgetData.autoReverseRoute)
 
                     if (isRouteChange || isFilterChange) {
                         Log.d(getLogTag(), "Route or filter change detected, clearing old cache for widget $appWidgetId")
                         cacheRepository.clearWidgetCache(appWidgetId)
                     }
-
-                    val widgetData = WidgetData(
-                        originId = originId,
-                        destinationId = destinationId,
-                        originName = "", // Don't store localized names - look them up dynamically
-                        destinationName = "", // Don't store localized names - look them up dynamically
-                        label = "",
-                        allowRouteReversal = routeReversalCheckbox.isChecked,
-                        autoReverseRoute = autoReverseRouteCheckbox.isChecked,
-                        manualOverrideUntil = 0, // Reset override on configuration change
-                        maxChanges = maxChanges
-                    )
                     
                     // Save widget configuration
                     preferencesRepository.saveWidgetData(appWidgetId, widgetData)

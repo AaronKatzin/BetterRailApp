@@ -26,6 +26,27 @@
     </string-array>
     <string name="widget_auto_reverse_route">عكس المسار تلقائيًا</string>
     <string name="widget_auto_reverse_description">عكس المسار تلقائيًا حسب الوقت (صباحًا/مساءً)</string>
+    <string name="widget_commute_mode">المنزل ومكتبان</string>
+    <string name="widget_commute_description">يعرض متى تغادر. قبل 13:00 القطار نحو مكتب اليوم، وبعد 13:00 نحو المنزل. اضغط اسم المكتب في الأداة لتبديله لهذا اليوم.</string>
+    <string name="widget_home_station">محطة المنزل</string>
+    <string name="widget_office_a">المكتب أ</string>
+    <string name="widget_office_b">المكتب ب</string>
+    <string name="widget_office_name_hint">الاسم على الأداة</string>
+    <string name="widget_scooter_home_to_station">من المنزل إلى المحطة، صباحًا (دقائق)</string>
+    <string name="widget_scooter_station_to_home">من المحطة إلى المنزل، مساءً (دقائق)</string>
+    <string name="widget_scooter_station_to_office">من المحطة إلى المكتب، صباحًا (دقائق)</string>
+    <string name="widget_scooter_office_to_station">من المكتب إلى المحطة، مساءً (دقائق)</string>
+    <string name="widget_weekdays_title">المكتب حسب اليوم</string>
+    <string name="widget_minutes_hint">0</string>
+    <string name="widget_commute_missing">اختر محطة المنزل ومحطتي مكتب مختلفتين</string>
+    <string name="leave_in_minutes">المغادرة خلال %d د</string>
+    <string name="for_the_train">لقطار %s</string>
+    <string name="eta_caps">الوصول</string>
+    <string name="leave_caps">مغادرة</string>
+    <string name="leave_eta_header">مغادرة · وصول</string>
+    <string name="office_a_name">المكتب أ</string>
+    <string name="office_b_name">المكتب ب</string>
+    <string name="switch_office">تبديل المكتب</string>
 
     <!-- Widget display strings -->
     <string name="tap_to_configure">اضغط للإعداد</string>
