@@ -67,7 +67,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   name: AARON_RAIL_PREVIEW ? "Aaron Rail" : "Better Rail",
   slug: "better-rail",
   owner: "better-rail",
-  version: "2.8.9",
+  version: "3.0.0",
   updates: {
     enabled: !IS_E2E,
     url: "https://u.expo.dev/b7819f45-8466-4c11-8628-3539099e6c78",
@@ -173,6 +173,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "android.permission.USE_FULL_SCREEN_INTENT",
       "android.permission.READ_CALENDAR",
       "android.permission.WRITE_CALENDAR",
+      "android.permission.POST_NOTIFICATIONS",
+      "android.permission.POST_PROMOTED_NOTIFICATIONS",
     ],
     // Preview does not claim betterrail:// or the better-rail.co.il App Links.
     intentFilters: AARON_RAIL_PREVIEW
@@ -204,8 +206,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     "expo-router",
     "expo-iap",
-    // Patched: SDK 58 resets the app's forceRTL on every launch. Built from source on Android (package.json
-    // expo.autolinking) so the patch applies. Drop both once an expo-localization release keeps runtime RTL.
+    // Patched: 58.0.5 keeps the app's forceRTL, except once on the first launch after updating from a version
+    // that reset it. Built from source on Android (package.json expo.autolinking) so the patch applies. The patch
+    // can go once most installs have launched a build with 58.0.5+.
     ["expo-localization", { supportedLocales: { ios: IOS_SUPPORTED_LOCALES } }],
     // Required by react-native-unistyles on Android (edge-to-edge insets via the mini runtime).
     "react-native-edge-to-edge",
@@ -238,7 +241,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       },
     ],
     ["expo-font", { ios: { fonts: HEEBO_FONTS_IOS }, android: { fonts: [HEEBO_FONT_ANDROID] } }],
-    // Sole FCM receiver on Android — delivers live-ride data messages (Notifee renders them).
+    // Sole FCM receiver on Android — delivers live-ride data messages (native LiveRideNotificationModule renders them).
     // The Google Services gradle plugin FCM needs is applied by ./plugins/withBetterRailAndroid
     // (previously came from the @react-native-firebase/app plugin).
     "expo-notifications",

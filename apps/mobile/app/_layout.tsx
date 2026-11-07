@@ -10,7 +10,6 @@ import { ThemeProvider, DarkTheme, DefaultTheme } from "expo-router/react-naviga
 import { useUnistyles } from "react-native-unistyles"
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache, focusManager } from "react-query"
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context"
-import { ActionSheetProvider } from "@expo/react-native-action-sheet"
 import * as Sentry from "@sentry/react-native"
 import { enableScreens } from "react-native-screens"
 import { PostHogProvider } from "posthog-react-native"
@@ -37,7 +36,7 @@ import { monitorLiveActivities } from "@/utils/ios-helpers"
 import { useForceUpdate } from "@/hooks/use-force-update"
 import { ForceUpdateScreen } from "@/screens/force-update/force-update-screen"
 import { openActiveRide } from "@/utils/helpers/open-active-ride"
-import { isNetworkError } from "@/utils/helpers/network-errors"
+import { isNetworkError, isSuspendedNetworkError } from "@/utils/helpers/network-errors"
 import PushNotification from "react-native-push-notification"
 import "react-native-console-time-polyfill"
 import { IS_E2E } from "@/config/e2e"
@@ -105,6 +104,8 @@ export const queryClient = new QueryClient({
         (error instanceof Error && (error.name === "RoutesNotFoundError" || error.message === "Not found"))
       )
         return
+      // Most network errors come from requests the OS cut off while the app was suspended.
+      if (isSuspendedNetworkError(error)) return
 
       Sentry.captureException(error, {
         tags: { source: "react-query" },
@@ -115,6 +116,7 @@ export const queryClient = new QueryClient({
   }),
   mutationCache: new MutationCache({
     onError: (error, _variables, _context, mutation) => {
+      if (isSuspendedNetworkError(error)) return
       Sentry.captureException(error, {
         tags: { source: "react-query-mutation" },
         extra: { mutationKey: mutation.options.mutationKey },
@@ -182,7 +184,7 @@ function RootLayout() {
       .getState()
       .checkLiveActivitiesSupported()
       .then((canRunLiveActivities) => {
-        if (canRunLiveActivities === true) {
+        if (Platform.OS === "ios" && canRunLiveActivities === true) {
           monitorLiveActivities()
         }
       })
@@ -260,15 +262,13 @@ function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <ActionSheetProvider>
-          <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-            <PostHogProvider client={posthog} autocapture={{ captureScreens: false }}>
-              <TipIAPProvider>
-                <AppStack />
-              </TipIAPProvider>
-            </PostHogProvider>
-          </SafeAreaProvider>
-        </ActionSheetProvider>
+        <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+          <PostHogProvider client={posthog} autocapture={{ captureScreens: false }}>
+            <TipIAPProvider>
+              <AppStack />
+            </TipIAPProvider>
+          </PostHogProvider>
+        </SafeAreaProvider>
       </GestureHandlerRootView>
     </QueryClientProvider>
   )
