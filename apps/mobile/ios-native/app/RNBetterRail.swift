@@ -49,44 +49,108 @@ class RNBetterRail: NSObject {
     @objc func monitorActivities() {
     LiveActivitiesController.shared.monitorLiveActivities()
   }
+
+  /// The ride the server started with push-to-start, once it's registered: what JS needs to show it. Nil when none runs.
+  @objc func autoStartedRide(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) -> Void {
+    Task {
+      for activity in Activity<BetterRailActivityAttributes>.activities
+      where activity.attributes.scheduleId != nil && activity.activityState == .active {
+        guard let rideId = await LiveActivitiesController.tokenRegistry.rideId(activityId: activity.id) else { continue }
+        let attributes = activity.attributes
+        var ride: [String: Any] = [
+          "rideId": rideId,
+          "originId": attributes.originStationId,
+          "destinationId": attributes.destinationStationId,
+          "departureTime": attributes.departureTime,
+          "trainNumbers": attributes.trainNumbers,
+        ]
+        if let viaStationId = attributes.viaStationId { ride["viaStationId"] = viaStationId }
+        resolve(ride)
+        return
+      }
+      resolve(nil)
+    }
+  }
+
+  /// The push-to-start token the server starts recurring rides with, or nil before iOS 17.2 or until iOS issues one.
+  /// Waits a few seconds for the first one, which arrives shortly after `monitorActivities`.
+  @objc func pushToStartToken(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) -> Void {
+    guard #available(iOS 17.2, *), ActivityAuthorizationInfo().areActivitiesEnabled else {
+      resolve(nil)
+      return
+    }
+    Task {
+      for _ in 0..<20 {
+        if let token = UserDefaults.standard.string(forKey: LiveActivitiesController.pushToStartTokenKey) {
+          resolve(token)
+          return
+        }
+        try? await Task.sleep(nanoseconds: 250_000_000)
+      }
+      resolve(nil)
+    }
+  }
   
   /// data - A JSON representation of a Route
+  /// Rejects with a code naming the step that failed, which `toLiveActivityError` in ride-errors.ts maps for reporting.
   @objc func startActivity(_ routeJSON: String, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) -> Void {
-    let decoder = JSONDecoder()
-
+    let route: Route
     do {
-      let route = try decoder.decode(Route.self, from: routeJSON.data(using: .utf8)!)
-      Task {
-        let controller = LiveActivitiesController.shared
-        let activityId: String
-
-        do {
-          activityId = try await controller.startLiveActivity(route: route)
-        } catch {
-          reject("error", "An error occurred while starting activity from RN", error)
-          return
-        }
-
-        let result = await LiveActivitiesController.tokenRegistry.awaitRideId(activityId: activityId, timeout: LiveActivitiesController.rideStartTimeout)
-        if case .registered(let rideId) = result {
-          resolve(rideId)
-          return
-        }
-
-        // The server won't be pushing updates to it, so don't leave the activity on screen.
-        await controller.endLiveActivity(activityId: activityId)
-
-        let (code, description): (Int, String) = switch result {
-          case .failed: (1001, "Live Activity Server failed to start a new live activity.")
-          case .ended: (1003, "The live activity ended before its ride started.")
-          default: (1004, "Timed out waiting for the live activity push token or ride ID.")
-        }
-        let error = NSError(domain: "live-activity", code: code, userInfo: [NSLocalizedDescriptionKey: description])
-        reject("error", "An error occurred while starting activity from RN", error)
-      }
+      route = try JSONDecoder().decode(Route.self, from: routeJSON.data(using: .utf8)!)
     } catch {
       print("Error decoding JSON: \(String(describing: error))")
-      reject("error", "An error occurred while starting activity from RN", error)
+      reject("invalid_route", "Couldn't decode the route", error)
+      return
+    }
+
+    // Riders often lock the phone right after tapping start. Without this, iOS suspends the app
+    // before the server answers, the request is cut off and the start fails.
+    let backgroundTask = BackgroundTask(name: "Start live activity")
+
+    Task {
+      defer { backgroundTask.end() }
+
+      let controller = LiveActivitiesController.shared
+      let activityId: String
+
+      do {
+        activityId = try await controller.startLiveActivity(route: route)
+      } catch {
+        let nsError = error as NSError
+        let code = nsError.domain == "live-activity" && nsError.code == 1002 ? "activities_disabled" : "activity_request"
+        reject(code, "Couldn't request the live activity", error)
+        return
+      }
+
+      let result = await LiveActivitiesController.tokenRegistry.awaitRideId(activityId: activityId, timeout: LiveActivitiesController.rideStartTimeout)
+      if case .registered(let rideId) = result {
+        resolve(rideId)
+        return
+      }
+
+      // The server won't be pushing updates to it, so don't leave the activity on screen.
+      await controller.endLiveActivity(activityId: activityId)
+
+      var userInfo: [String: Any] = [:]
+      let (code, description): (String, String)
+      switch result {
+      case .failed(.noResponse(let urlErrorCode)):
+        (code, description) = ("no_response", "The ride start request got no response.")
+        if let urlErrorCode { userInfo["urlErrorCode"] = urlErrorCode.rawValue }
+      case .failed(.rejected(let status, let reason)):
+        (code, description) = ("server_rejected", "The server didn't start the ride.")
+        userInfo["status"] = status
+        if let reason { userInfo["reason"] = reason }
+      case .timedOut(hadToken: true):
+        (code, description) = ("no_response", "Timed out waiting for the server's ride ID.")
+      case .timedOut(hadToken: false):
+        (code, description) = ("push_token_timeout", "Timed out waiting for the live activity push token.")
+      case .ended, .registered:
+        (code, description) = ("ended", "The live activity ended before its ride started.")
+      }
+      userInfo[NSLocalizedDescriptionKey] = description
+
+      reject(code, description, NSError(domain: "live-activity", code: 1001, userInfo: userInfo))
     }
   }
   
@@ -102,30 +166,34 @@ class RNBetterRail: NSObject {
     }
   }
   
+  /// The ride's Live Activity, if it's still there: an empty list means the ride is over. Only this ride's activity
+  /// counts, so a recurring ride started by push doesn't keep an earlier ride looking active.
   @objc func isRideActive(_ rideId: String, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) -> Void {
-    // Use ActivityKit's API to get running activities instead of in-memory TokenRegistry.
-    // This works even after app restart since ActivityKit maintains the activity state.
-    let runningActivities = Activity<BetterRailActivityAttributes>.activities
+    Task {
+      // The registry keeps ride IDs across launches; ActivityKit keeps the activities
+      let activityId = await LiveActivitiesController.tokenRegistry.activityId(rideId: rideId)
+      let runningActivities = Activity<BetterRailActivityAttributes>.activities.filter { $0.id == activityId }
 
-    let jsonArray = runningActivities.map { activity -> [String: String] in
-      let tokenString: String
-      if let token = activity.pushToken {
-        tokenString = token.map { String(format: "%02x", $0) }.joined()
-      } else {
-        tokenString = ""
+      let jsonArray = runningActivities.map { activity -> [String: String] in
+        let tokenString: String
+        if let token = activity.pushToken {
+          tokenString = token.map { String(format: "%02x", $0) }.joined()
+        } else {
+          tokenString = ""
+        }
+
+        return ["rideId": activity.id, "token": tokenString]
       }
 
-      return ["rideId": activity.id, "token": tokenString]
-    }
-
-    do {
-      let jsonData = try JSONSerialization.data(withJSONObject: jsonArray, options: .prettyPrinted)
-      if let jsonString = String(data: jsonData, encoding: .utf8) {
-        resolve(jsonString)
+      do {
+        let jsonData = try JSONSerialization.data(withJSONObject: jsonArray, options: .prettyPrinted)
+        if let jsonString = String(data: jsonData, encoding: .utf8) {
+          resolve(jsonString)
+        }
+      } catch {
+        print(error.localizedDescription)
+        reject("error", "error", error)
       }
-    } catch {
-      print(error.localizedDescription)
-      reject("error", "error", error)
     }
   }
 
@@ -214,18 +282,23 @@ class RNBetterRail: NSObject {
     ArrivalAlarmScheduler.cancel()
   }
 
-  /// Resolves with { rideId, alarmId, stops: [{ train, fireDate (ms), isScheduled }] }, or nil when there's no alarm.
+  /// Resolves with { rideId, alarmId, stops: [{ train, fireDate (ms), status }] }, or nil when there's no alarm.
+  /// `status` is an ArrivalAlarmStopStatus. Also cancels any AlarmKit alarm the stored alarm doesn't point to.
   @objc func getArrivalAlarm(_ resolve: RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) -> Void {
-    guard #available(iOS 26.0, *), let state = ArrivalAlarmStore.load() else {
+    guard #available(iOS 26.0, *), let alarm = ArrivalAlarmScheduler.current() else {
       resolve(nil)
       return
     }
 
     resolve([
-      "rideId": state.rideId,
-      "alarmId": state.alarmId.uuidString.lowercased(),
-      "stops": state.stops.map {
-        ["train": $0.train, "fireDate": $0.fireDate.timeIntervalSince1970 * 1000, "isScheduled": ArrivalAlarmScheduler.isScheduled($0)] as [String: Any]
+      "rideId": alarm.state.rideId,
+      "alarmId": alarm.state.alarmId.uuidString.lowercased(),
+      "stops": alarm.state.stops.map {
+        [
+          "train": $0.train,
+          "fireDate": $0.fireDate.timeIntervalSince1970 * 1000,
+          "status": (alarm.statuses[$0.train] ?? .unknown).rawValue,
+        ] as [String: Any]
       },
     ])
   }
@@ -290,6 +363,31 @@ class RNBetterRail: NSObject {
       case .failure(let error):
         reject("error", "Failed to get widget configurations", error)
       }
+    }
+  }
+}
+
+/// Keeps the app running in the background until `end()` (or until iOS's time runs out), so work in flight isn't suspended.
+private final class BackgroundTask: @unchecked Sendable {
+  private let lock = NSLock()
+  private var id = UIBackgroundTaskIdentifier.invalid
+
+  init(name: String) {
+    let id = UIApplication.shared.beginBackgroundTask(withName: name) { [weak self] in self?.end() }
+    lock.lock()
+    self.id = id
+    lock.unlock()
+  }
+
+  /// Safe to call more than once, and from any thread.
+  func end() {
+    lock.lock()
+    let id = self.id
+    self.id = .invalid
+    lock.unlock()
+
+    if id != .invalid {
+      UIApplication.shared.endBackgroundTask(id)
     }
   }
 }

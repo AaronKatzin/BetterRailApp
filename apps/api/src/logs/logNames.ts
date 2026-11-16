@@ -47,6 +47,7 @@ export const logNames = {
     scheduleExisting: "Scheduled existing rides",
     rideInPast: "The requested ride is in the past",
     rideInFuture: "The requested ride is in the future",
+    rideOverdue: "Dropped a ride still tracked long after its arrival",
     scheduleRide: {
       success: "Scheduled notifications for ride",
       failed: "Failed to register notifications for ride",
@@ -134,6 +135,23 @@ export const logNames = {
     emptyStopCodes: "No stop codes available for SIRI monitoring in the active feed",
     snapshotReadFailed: "Failed to read the SIRI snapshot",
     snapshotWriteFailed: "Failed to write the SIRI snapshot",
+  },
+  devices: {
+    sync: {
+      failed: "Failed to sync device state",
+    },
+    delete: {
+      failed: "Failed to delete device state",
+    },
+    reminder: {
+      success: "Sent recurring ride reminder",
+      failed: "Failed to send recurring ride reminder",
+      tokenGone: "Dropped a push token the push service rejected",
+    },
+    autoStart: {
+      success: "Auto-started a recurring ride",
+      failed: "Failed to auto-start a recurring ride",
+    },
   },
   gtfs: {
     noActiveFeed: "No active GTFS feed in the database",

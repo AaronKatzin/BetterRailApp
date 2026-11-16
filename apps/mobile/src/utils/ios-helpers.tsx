@@ -1,6 +1,6 @@
 import { NativeModules, Platform } from "react-native"
 import { RouteItem } from "@/services/api"
-import { RideStartError } from "./helpers/ride-errors"
+import { toLiveActivityError } from "./helpers/ride-errors"
 import { IS_E2E } from "@/config/e2e"
 
 const { RNBetterRail } = NativeModules
@@ -28,6 +28,28 @@ export function reloadAllTimelines() {
 
 export function monitorLiveActivities() {
   RNBetterRail.monitorActivities()
+}
+
+/** The push-to-start token the server auto-starts recurring rides with; null before iOS 17.2 or without Live Activities. */
+export async function pushToStartToken(): Promise<string | null> {
+  if (Platform.OS !== "ios" || !RNBetterRail?.pushToStartToken) return null
+  return RNBetterRail.pushToStartToken()
+}
+
+/** A ride the server started with push-to-start, as the Live Activity holds it. */
+export type AutoStartedRide = {
+  rideId: string
+  originId: number
+  destinationId: number
+  /** "YYYY-MM-DDTHH:mm:ss", Israel's wall clock */
+  departureTime: string
+  trainNumbers: number[]
+  viaStationId?: number
+}
+
+export async function autoStartedRide(): Promise<AutoStartedRide | null> {
+  if (Platform.OS !== "ios" || !RNBetterRail?.autoStartedRide) return null
+  return RNBetterRail.autoStartedRide()
 }
 
 export type ActivityAuthorizationInfo = { areActivitiesEnabled: boolean; frequentPushesEnabled: boolean }
@@ -85,8 +107,7 @@ export async function startLiveActivity(route: RouteItem) {
     return rideId
   } catch (err) {
     console.error("Error starting live activity", err)
-    // Tagged like the Android stages, so an iOS failure isn't reported as an untyped error.
-    throw new RideStartError("live_activity", "Couldn't start the live activity", { cause: err })
+    throw toLiveActivityError(err)
   }
 }
 
@@ -114,4 +135,6 @@ export default {
   isRideActive,
   canRunLiveActivities,
   activityAuthorizationInfo,
+  pushToStartToken,
+  autoStartedRide,
 }
