@@ -1,10 +1,9 @@
 const { withAndroidManifest } = require("@expo/config-plugins")
 
 /**
- * Adds the widget components to AndroidManifest: the two AppWidget providers, the
- * alarm/boot update receiver, the RemoteViews service, the two configuration activities, and
- * the Firebase notification icon. Permissions and the betterrail:// deep link are declared in
- * app.config.ts.
+ * Adds the commute widget components to AndroidManifest: the AppWidget providers,
+ * the alarm/boot update receiver, and the configuration activities.
+ * Permissions and the aaronrail:// deep link are declared in app.config.ts.
  */
 const APPWIDGET_UPDATE = "android.appwidget.action.APPWIDGET_UPDATE"
 
@@ -34,32 +33,10 @@ const configActivity = (name) => ({
 const withAndroidManifestMods = (config) =>
   withAndroidManifest(config, (cfg) => {
     const manifest = cfg.modResults.manifest
-
-    // Firebase's AAR merges com.google.android.gms.permission.AD_ID during the Gradle build.
-    // tools:node="remove" tells the manifest merger to strip it, which is the only way to
-    // override a permission injected by a library dependency at build time (not at prebuild time).
-    manifest.$["xmlns:tools"] = "http://schemas.android.com/tools"
-    manifest["uses-permission"] = manifest["uses-permission"] || []
-    manifest["uses-permission"].push({
-      $: { "android:name": "com.google.android.gms.permission.AD_ID", "tools:node": "remove" },
-    })
-
-    // Package visibility (API 30+): lets Linking.canOpenURL see the X / Instagram apps.
-    manifest.queries = manifest.queries || [{}]
-    manifest.queries[0].intent = [
-      ...(manifest.queries[0].intent || []),
-      ...["twitter", "instagram"].map((scheme) => ({
-        action: [{ $: { "android:name": "android.intent.action.VIEW" } }],
-        data: [{ $: { "android:scheme": scheme } }],
-      })),
-    ]
-
     const app = manifest.application[0]
 
     app.activity = app.activity || []
     app.receiver = app.receiver || []
-    app.service = app.service || []
-    app["meta-data"] = app["meta-data"] || []
 
     app.activity.push(
       configActivity(".widget.CompactWidget2x2ConfigActivity"),
@@ -108,60 +85,6 @@ const withAndroidManifestMods = (config) =>
         ],
       },
     )
-
-    app.service.push({
-      $: {
-        "android:name": ".widget.TrainWidgetService",
-        "android:permission": "android.permission.BIND_REMOTEVIEWS",
-        "android:exported": "false",
-      },
-    })
-
-    // Arrival alarm: the exact alarm fires the receiver, which starts the ringing service, whose
-    // notification opens the full-screen alarm. The receiver also restores the alarm after a reboot.
-    app.receiver.push({
-      $: { "android:name": ".alarm.ArrivalAlarmReceiver", "android:exported": "false" },
-      "intent-filter": [
-        {
-          action: [
-            { $: { "android:name": "android.intent.action.BOOT_COMPLETED" } },
-            { $: { "android:name": "android.intent.action.MY_PACKAGE_REPLACED" } },
-            { $: { "android:name": "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" } },
-          ],
-        },
-      ],
-    })
-    app.receiver.push(
-      { $: { "android:name": ".liveride.LiveRideStaleReceiver", "android:exported": "false" } },
-      { $: { "android:name": ".liveride.LiveRideActionReceiver", "android:exported": "false" } },
-    )
-    app.service.push({
-      $: {
-        "android:name": ".alarm.ArrivalAlarmService",
-        "android:exported": "false",
-        // Allowed for apps holding the exact alarm permission, to keep an alarm ringing.
-        "android:foregroundServiceType": "systemExempted",
-      },
-    })
-    app.activity.push({
-      $: {
-        "android:name": ".alarm.ArrivalAlarmActivity",
-        "android:exported": "false",
-        "android:theme": "@android:style/Theme.Material.NoActionBar",
-        "android:showWhenLocked": "true",
-        "android:turnScreenOn": "true",
-        "android:excludeFromRecents": "true",
-        "android:launchMode": "singleInstance",
-        "android:taskAffinity": "",
-      },
-    })
-
-    app["meta-data"].push({
-      $: {
-        "android:name": "com.google.firebase.messaging.default_notification_icon",
-        "android:resource": "@drawable/notification_icon",
-      },
-    })
 
     return cfg
   })

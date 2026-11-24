@@ -1,33 +1,19 @@
 import { useEffect, useRef } from "react"
-import { EmitterSubscription, Linking, NativeEventEmitter } from "react-native"
+import { EmitterSubscription, Linking } from "react-native"
 import { router, useNavigationContainerRef } from "expo-router"
 import type { NavigationState } from "expo-router/react-navigation"
 import { extractURLParams } from "@/utils/helpers/url"
-import { donateRouteIntent, reloadAllTimelines } from "@/utils/ios-helpers"
 import { useRoutePlanStore } from "@/models/route-plan/route-plan"
-import { openActiveRide } from "@/utils/helpers/open-active-ride"
-import { trackEvent } from "@/services/analytics"
-import { getWidgetFamilyFromURL } from "@/utils/widget-helpers"
 import { getStationById } from "@/data/stations"
-import { isWebsiteURL, parseWebsiteRouteURL } from "@/utils/helpers/web-links"
-import { getInitialWebsiteHandoffURL } from "@/utils/website-handoff"
-import Shortcuts, { ShortcutItem } from "react-native-quick-actions-shortcuts"
-
-const ShortcutsEmitter = new NativeEventEmitter(Shortcuts)
 
 /**
- * Handles navigation of deep links provided to the app.
+ * Opens the route list when a commute widget is tapped.
  */
 export function useDeepLinking(storeReady: boolean) {
   const pendingURL = useRef<string | null>(null)
   const navigationRef = useNavigationContainerRef()
 
-  /**
-   * Closes modals covering the main stack and the screens a previous deep link opened, so the next
-   * deep-linked route list opens where the user was, without piling up on repeated widget taps.
-   */
   function dismissDeepLinkedScreens() {
-    // expo-router nests the app's layouts under its own root navigator.
     let parent = navigationRef.isReady() ? navigationRef.getRootState() : undefined
     while (parent && !parent.routes.some((route) => route.name === "(main)")) {
       parent = parent.routes[parent.index]?.state as NavigationState | undefined
@@ -35,7 +21,6 @@ export function useDeepLinking(storeReady: boolean) {
     if (!parent) return
 
     const mainIndex = parent.routes.findIndex((route) => route.name === "(main)")
-    // Targeted, since the focused navigator is inside the modal. The queued dismiss and push then run on the main stack.
     if (parent.index > mainIndex) {
       navigationRef.dispatch({ type: "POP", payload: { count: parent.index - mainIndex }, target: parent.key })
     }
@@ -48,17 +33,11 @@ export function useDeepLinking(storeReady: boolean) {
   function deepLinkWidgetURL(url: string) {
     if (!storeReady) return
 
-    const family = getWidgetFamilyFromURL(url)
-    trackEvent("deep_link_widget", family ? { family } : undefined)
-
     const { originId, destinationId } = extractURLParams(url)
     const routePlan = useRoutePlanStore.getState()
 
-    const origin = getStationById(originId)
-    const destination = getStationById(destinationId)
-
-    routePlan.setOrigin(origin)
-    routePlan.setDestination(destination)
+    routePlan.setOrigin(getStationById(originId))
+    routePlan.setDestination(getStationById(destinationId))
 
     dismissDeepLinkedScreens()
     router.push({
@@ -71,96 +50,21 @@ export function useDeepLinking(storeReady: boolean) {
         deepLink: "true",
       },
     })
-
-    reloadAllTimelines()
-    donateRouteIntent(originId, destinationId)
-  }
-
-  function deepLinkLiveActivity() {
-    if (!storeReady) return
-    trackEvent("deep_link_live_activity")
-    openActiveRide()
-  }
-
-  function deepLinkWebsiteURL(url: string) {
-    if (!storeReady) return
-
-    const route = parseWebsiteRouteURL(url)
-    trackEvent("deep_link_website", { page: route ? "routes" : "other" })
-    if (!route) return
-
-    const origin = getStationById(route.originId)
-    const destination = getStationById(route.destinationId)
-    if (!origin || !destination || origin.id === destination.id) return
-    const viaStation = route.viaStationId ? getStationById(route.viaStationId) : undefined
-
-    const routePlan = useRoutePlanStore.getState()
-    routePlan.setOrigin(origin)
-    routePlan.setDestination(destination)
-    routePlan.setDate(new Date(route.time))
-    // The website searches by departure time only.
-    routePlan.setDateType("departure")
-
-    dismissDeepLinkedScreens()
-    router.push({
-      pathname: "/route-list",
-      params: {
-        originId: origin.id,
-        destinationId: destination.id,
-        time: String(route.time),
-        enableQuery: "true",
-        deepLink: "true",
-        ...(route.trip ? { trip: route.trip } : {}),
-        ...(viaStation ? { viaStationId: viaStation.id } : {}),
-      },
-    })
   }
 
   function handleDeepLinkURL(url: string | null) {
     if (!url) return
-    // Launch-time URL events (including Handoff) can arrive before persistence finishes.
     if (!storeReady) {
       pendingURL.current = url
       return
     }
-    if (isWebsiteURL(url)) {
-      deepLinkWebsiteURL(url)
-      return
-    }
-    if (url.includes("widget")) {
+    if (url.toLowerCase().includes("widget")) {
       deepLinkWidgetURL(url)
     }
-    if (url.toLowerCase().includes("liveactivity")) {
-      deepLinkLiveActivity()
-    }
-  }
-
-  function openHomeScreenShortcut(item: ShortcutItem | null) {
-    if (!item) return
-    const origin = getStationById(item.data.originId)
-    const destination = getStationById(item.data.destinationId)
-
-    const routePlan = useRoutePlanStore.getState()
-    routePlan.setOrigin(origin)
-    routePlan.setDestination(destination)
-    routePlan.setDate(new Date())
-
-    dismissDeepLinkedScreens()
-    router.push({
-      pathname: "/route-list",
-      params: {
-        originId: origin?.id,
-        destinationId: destination?.id,
-        time: String(new Date().getTime()),
-        enableQuery: "true",
-        deepLink: "true",
-      },
-    })
   }
 
   useEffect(() => {
     let linkingListener: EmitterSubscription
-    let shortcutsListener: EmitterSubscription
     let active = true
     const queuedURL = pendingURL.current
     let receivedURL = !!queuedURL
@@ -171,8 +75,7 @@ export function useDeepLinking(storeReady: boolean) {
     }
 
     Linking.getInitialURL().then((url) => {
-      // Prefer the latest URL event to a stale launch URL, and ignore an old effect's result.
-      if (active && !receivedURL) handleDeepLinkURL(url ?? getInitialWebsiteHandoffURL())
+      if (active && !receivedURL) handleDeepLinkURL(url)
     })
 
     linkingListener = Linking.addEventListener("url", ({ url }) => {
@@ -180,15 +83,9 @@ export function useDeepLinking(storeReady: boolean) {
       handleDeepLinkURL(url)
     })
 
-    if (storeReady) {
-      Shortcuts.getInitialShortcut().then(openHomeScreenShortcut)
-      shortcutsListener = ShortcutsEmitter.addListener("onShortcutItemPressed", openHomeScreenShortcut)
-    }
-
     return () => {
       active = false
       linkingListener?.remove()
-      shortcutsListener?.remove()
     }
   }, [storeReady])
 }

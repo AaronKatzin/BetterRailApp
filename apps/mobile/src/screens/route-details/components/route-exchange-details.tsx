@@ -1,5 +1,5 @@
 import React from "react"
-import { View, Image, ViewStyle, Alert } from "react-native"
+import { View, Image, ViewStyle } from "react-native"
 import { StyleSheet } from "react-native-unistyles"
 import { Text, ChangeDirectionButton } from "@/components"
 import { color, spacing, fontScale } from "@/theme"
@@ -8,7 +8,6 @@ import { dateFnsLocalization, translate, userLocale } from "@/i18n"
 import { Train } from "@/services/api"
 import { useRouter } from "expo-router"
 import HapticFeedback from "react-native-haptic-feedback"
-import { trackEvent } from "@/services/analytics"
 import { alternativeChangeStations, easyPlatformChanges, trainStartStation } from "./alternative-change-stations"
 import { acrossTheIsland } from "@/data/island-platforms"
 import { labelFontStyle, subheadingFontStyle } from "@/theme/theme-fonts"
@@ -26,12 +25,11 @@ type RouteExchangeProps = {
   departurePlatform: number
   firstTrain: Train
   secondTrain: Train
-  isRideOnThisRoute: boolean
   style?: ViewStyle
 }
 
 export const RouteExchangeDetails = (props: RouteExchangeProps) => {
-  const { stationName, arrivalPlatform, departurePlatform, firstTrain, secondTrain, isRideOnThisRoute, style } = props
+  const { stationName, arrivalPlatform, departurePlatform, firstTrain, secondTrain, style } = props
   const router = useRouter()
   const alternatives = alternativeChangeStations(firstTrain, secondTrain)
 
@@ -46,12 +44,7 @@ export const RouteExchangeDetails = (props: RouteExchangeProps) => {
         .filter(([, c]) => c === change)
         .map(([id]) => id)
         .join(",")
-    if (isRideOnThisRoute) {
-      Alert.alert(translate("ride.changeStationBlockedTitle"), translate("ride.changeStationBlockedMessage"))
-      return
-    }
     HapticFeedback.trigger("impactLight")
-    trackEvent("change_station_btn_press")
     router.push({
       pathname: "/select-station",
       params: {

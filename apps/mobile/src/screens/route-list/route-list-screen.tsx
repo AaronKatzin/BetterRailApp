@@ -5,18 +5,16 @@ import { LegendList, type LegendListRef, type ViewToken } from "@legendapp/list/
 import { useNetworkState } from "expo-network"
 import { useQuery } from "react-query"
 import { addDays } from "date-fns"
-import { useRouter, useLocalSearchParams, useIsFocused, Redirect } from "expo-router"
-import { useObserve } from "expo-observe"
+import { useRouter, useLocalSearchParams, Redirect } from "expo-router"
 import { useSharedValue } from "react-native-reanimated"
 import { useNavigationParamsStore } from "@/models/navigation-params/navigation-params"
 import { useShallow } from "zustand/react/shallow"
-import { useTrainRoutesStore, useRoutePlanStore, useRideStore, useSettingsStore } from "@/models"
-import { filterRouteData, TRAIN_INFO_PROMPT_SEARCH_THRESHOLD } from "@/models/settings/settings"
-import { color, fontScale, spacing } from "@/theme"
+import { useTrainRoutesStore, useRoutePlanStore, useSettingsStore } from "@/models"
+import { filterRouteData } from "@/models/settings/settings"
+import { fontScale, spacing } from "@/theme"
 import type { RouteItem } from "@/services/api"
-import { RouteApi } from "@/services/api/route-api"
 import { retryOnceOnNetworkError } from "@/utils/helpers/network-errors"
-import { Screen, RouteDetailsHeader, RouteCard, RouteCardHeight, RouteCardHeightWithHeader, WebsiteHandoff } from "@/components"
+import { Screen, RouteDetailsHeader, RouteCard, RouteCardHeight, RouteCardHeightWithHeader } from "@/components"
 import { ThemeBackground } from "@/components/theme-background/theme-background"
 import {
   NoTrainsFoundMessage,
@@ -32,13 +30,9 @@ import {
 } from "./components"
 import { flatMap, max, round } from "lodash"
 import { translate } from "@/i18n"
-import { formatDateForAPI, isRouteInThePast } from "@/utils/helpers/date-helpers"
+import { isRouteInThePast } from "@/utils/helpers/date-helpers"
 import { isHourIndexSupported } from "@/utils/hour-index"
 import { isLiquidGlassSupported } from "@/utils/liquid-glass"
-import { findRouteVoucher } from "@/utils/helpers/voucher-helpers"
-import { isOnRideTrains } from "@/utils/helpers/ride-helpers"
-import { useVouchersStore } from "@/models/vouchers/vouchers"
-import { useFeatureFlag } from "posthog-react-native"
 import { RoutesNotFoundError, type RouteSearchResult } from "@/models/train-routes/search-routes"
 import {
   getInitialScrollIndex,
@@ -61,8 +55,6 @@ export function RouteListScreen() {
     destinationId: string
     time: string
     enableQuery?: string
-    trip?: string
-    viaStationId?: string
   }>()
   const time = Number(params.time)
   if (!params.originId || !params.destinationId || !Number.isFinite(time)) return <Redirect href="/" />
@@ -74,8 +66,6 @@ export function RouteListScreen() {
       destinationId={params.destinationId}
       time={time}
       enableQuery={params.enableQuery === "true"}
-      trip={params.trip}
-      viaStationId={params.viaStationId}
     />
   )
 }
@@ -85,38 +75,23 @@ function RouteListResults({
   destinationId,
   time,
   enableQuery,
-  trip,
-  viaStationId,
 }: {
   originId: string
   destinationId: string
   time: number
   enableQuery: boolean
-  trip?: string
-  viaStationId?: string
 }) {
   const router = useRouter()
-  const vouchers = useVouchersStore((s) => s.vouchers)
   const getRoutes = useTrainRoutesStore((s) => s.getRoutes)
-  const isFocused = useIsFocused()
   const { dateType, date: routePlanDate } = useRoutePlanStore(useShallow((s) => ({ dateType: s.dateType, date: s.date })))
-  const rideRoute = useRideStore((s) => s.route)
   const hourIndexEnabled = useSettingsStore((s) => s.showHourIndex)
   const showRouteCardHeader = useSettingsStore((s) => s.showRouteCardHeader)
   const maxChanges = useSettingsStore((s) => s.maxChanges)
   const hideSlowTrains = useSettingsStore((s) => s.hideSlowTrains)
   const setMaxChanges = useSettingsStore((s) => s.setMaxChanges)
   const setHideSlowTrains = useSettingsStore((s) => s.setHideSlowTrains)
-  const { trainSearchCount, recordTrainSearch, seenTrainInfoPrompt, setSeenTrainInfoPrompt } = useSettingsStore(
-    useShallow((s) => ({
-      trainSearchCount: s.trainSearchCount,
-      recordTrainSearch: s.recordTrainSearch,
-      seenTrainInfoPrompt: s.seenTrainInfoPrompt,
-      setSeenTrainInfoPrompt: s.setSeenTrainInfoPrompt,
-    })),
-  )
+  const recordTrainSearch = useSettingsStore((s) => s.recordTrainSearch)
   const colorScheme = useColorScheme()
-  const { markInteractive } = useObserve()
 
   const [dayResults, setDayResults] = useState<RouteSearchResult[]>([])
   const routeData = useMemo(() => organizeRouteResults(dayResults), [dayResults])
@@ -146,22 +121,6 @@ function RouteListResults({
   const [isListReady, setIsListReady] = useState(false)
   const hasRecordedSearch = useRef(false)
 
-  // Prompt the user once to choose whether to show the "Train Info" row on route cards.
-  // Gated behind the "show-train-info-prompt" PostHog feature flag and delayed until the
-  // user has searched for trains at least twice. It is shown at most once per user.
-  const trainInfoPromptFlag = useFeatureFlag("show-train-info-prompt")
-  useEffect(() => {
-    if (!trainInfoPromptFlag || trainSearchCount < TRAIN_INFO_PROMPT_SEARCH_THRESHOLD || seenTrainInfoPrompt) return
-
-    // Wait for the route-list push transition to settle before presenting the sheet.
-    const timeout = setTimeout(() => {
-      setSeenTrainInfoPrompt(true)
-      router.push("/train-info-prompt")
-    }, 600)
-
-    return () => clearTimeout(timeout)
-  }, [router, seenTrainInfoPrompt, setSeenTrainInfoPrompt, trainInfoPromptFlag, trainSearchCount])
-
   const { isInternetReachable } = useNetworkState()
   const queryKey = routeListDayQueryKey(originId, destinationId, currentDate.getTime())
   const trains = useQuery(queryKey, () => getRoutes(originId, destinationId, currentDate.getTime()), {
@@ -170,43 +129,6 @@ function RouteListResults({
     refetchInterval: 60_000,
     keepPreviousData: false,
   })
-
-  // Keep trip restoration tied to the requested day while the list loads other days.
-  const requestedDayQueryKey = routeListDayQueryKey(originId, destinationId, time)
-  const websiteTripRoutes = useQuery(
-    viaStationId ? ["websiteTrip", originId, destinationId, time, viaStationId] : requestedDayQueryKey,
-    async () => {
-      if (!viaStationId) return getRoutes(originId, destinationId, time)
-      const [date, hour] = formatDateForAPI(time)
-      return new RouteApi().getRoutes(originId, destinationId, date, hour, { viaStation: viaStationId })
-    },
-    {
-      enabled: enableQuery && !!trip && isFocused,
-      retry: retryOnceOnNetworkError,
-      select: (data) => (Array.isArray(data) ? data : data.routes),
-    },
-  )
-
-  const openedWebsiteTrip = useRef<string | null>(null)
-  useEffect(() => {
-    if (!isFocused || !trip || !websiteTripRoutes.isSuccess || !websiteTripRoutes.data) return
-    const key = `${originId}/${destinationId}/${time}/${trip}/${viaStationId ?? ""}`
-    if (openedWebsiteTrip.current === key) return
-    // Handle unavailable trips once so polling doesn't open details later.
-    openedWebsiteTrip.current = key
-    const routeItem = websiteTripRoutes.data.find(
-      (route) =>
-        new Date(route.departureTime).toDateString() === new Date(time).toDateString() &&
-        route.trains.map((train) => train.trainNumber).join("-") === trip,
-    )
-    if (!routeItem) return
-    useNavigationParamsStore.getState().setRouteDetails({
-      routeItem: { ...routeItem, viaStationId },
-      originId,
-      destinationId,
-    })
-    router.push("/route-details")
-  }, [isFocused, trip, websiteTripRoutes.isSuccess, websiteTripRoutes.data, originId, destinationId, time, viaStationId, router])
 
   // This also handles cached results, for which onSuccess is not called on initial display.
   useEffect(() => {
@@ -238,8 +160,6 @@ function RouteListResults({
   // The hour index covers the day currently at the top of the list, and highlights its hour.
   // The hour lives in a shared value so scrolling doesn't re-render the screen.
   const [visibleDate, setVisibleDate] = useState<string | null>(null)
-  const handoffDate = new Date(visibleDate ?? displayData.find((item) => typeof item === "string") ?? currentDate.getTime())
-  handoffDate.setHours(currentDate.getHours(), currentDate.getMinutes(), 0, 0)
   const topHour = useSharedValue(-1)
   const onViewableItemsChanged = ({ viewableItems }: { viewableItems: ViewToken<RouteData>[] }) => {
     const first = viewableItems[0]?.item
@@ -275,13 +195,6 @@ function RouteListResults({
       animated: false,
     })
   }
-
-  // Signal TTI after the results or an empty/error state has resolved.
-  useEffect(() => {
-    if (displayData.length > 0 || (!trains.isLoading && (trains.isError || allRoutesHiddenByFilter))) {
-      markInteractive()
-    }
-  }, [displayData.length, trains.isLoading, trains.isError, allRoutesHiddenByFilter, markInteractive])
 
   const closestIndex = getInitialScrollIndex(displayData, time, dateType)
   const initialScrollTarget =
@@ -365,8 +278,6 @@ function RouteListResults({
         departureTime={departureTime}
         arrivalTime={arrivalTime}
         delay={item.delay}
-        isActiveRide={isOnRideTrains(rideRoute, item)}
-        hasVoucher={!!findRouteVoucher(vouchers, item)}
         isRouteInThePast={isRouteInThePast(arrivalTime, item.delay)}
         onPress={() => {
           useNavigationParamsStore.getState().setRouteDetails({ routeItem: item, originId, destinationId })
@@ -387,7 +298,6 @@ function RouteListResults({
 
   return (
     <Screen testID="route-list-screen" style={styles.root} preset="fixed" unsafe={true} statusBar="light-content">
-      <WebsiteHandoff originId={originId} destinationId={destinationId} time={handoffDate.getTime()} />
       <RouteDetailsHeader
         screenName="routeList"
         originId={originId}
@@ -447,14 +357,12 @@ function RouteListResults({
             // Rows only re-render when their item or this changes, so it lists everything else renderRouteCard reads.
             // dataUpdatedAt re-renders them on each refetch, so departed trains grey out.
             extraData={[
-              rideRoute,
               routePlanDate,
               trains.status,
               trains.dataUpdatedAt,
               loadingDate,
               hideSlowTrains,
               maxChanges,
-              vouchers,
               shouldShowDashedLine,
               colorScheme,
             ]}

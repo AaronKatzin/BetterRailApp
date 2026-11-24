@@ -1,78 +1,33 @@
-# Better Rail
+# Aaron Rail
 
-<img src=".github/assets/iphone-screenshot.avif" width="300" align="right">
+Personal Android fork of [Better Rail](https://github.com/better-rail/app) (guytepper/better-rail), cut down to the commute home-screen widget.
 
-<a href="https://github.com/guytepper/better-rail/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-brightgreen" alt="" /></a>&nbsp;<a href="https://x.com/better_rail"><img src="https://img.shields.io/twitter/follow/better_rail" alt="" /></a>
+The widget is native Kotlin. It shows the next train for a two-office weekday schedule, with a manual office toggle, morning/evening reversal at 13:00, per-leg scooter minutes, leave-by times, ETA, and live delays. Tapping it opens this app on that route. Station search and the timetable request live in the widget; the app is the shell that installs, launches, and handles the deep link.
 
-Better Rail is an open source mobile client for Israel Railways, with an emphasis on great design, performance and accessibility.
+Sideload builds use `AARON_RAIL_PREVIEW=1` (`com.aaronkatzin.rail`, label "Aaron Rail") so the app can sit next to Play Store Better Rail. See `.github/workflows/aaron-rail-apk.yml`.
 
-**Available on the [App Store](https://apps.apple.com/il/app/better-rail/id1562982976) & [Play Store](https://play.google.com/store/apps/details?id=com.betterrail)**
+## Layout
 
-## Overview
+| Path                | What                                                           |
+| ------------------- | -------------------------------------------------------------- |
+| `apps/mobile`       | Expo app shell plus the Android widget under `android-native/` |
+| `packages/stations` | Station list and photos used by the app                        |
 
-Better Rail is built with React Native. We also use Swift and Kotlin to leverage native platform functionalities.
+The widget calls the existing Better Rail rail API (`https://api.better-rail.co.il`). This repo does not ship that server.
 
-The repository is a Bun workspaces monorepo:
+## Setup
 
-| Path                | What                                                                                              |
-| ------------------- | ------------------------------------------------------------------------------------------------- |
-| `apps/mobile`       | The React Native / Expo app ([README](apps/mobile/README.md))                                     |
-| `apps/api`          | The API on Cloudflare Workers: timetable, live rides, fares ([README](apps/api/README.md))        |
-| `apps/egress-proxy` | Fixed-IP relay for the two upstreams a Worker can't reach ([README](apps/egress-proxy/README.md)) |
-| `apps/conductor`    | Discord bot + email bridge, a Cloudflare Worker ([README](apps/conductor/README.md))              |
-| `apps/web`          | better-rail.co.il — TanStack Start site & web timetable ([README](apps/web/README.md))            |
-| `packages/stations` | Station list + photos shared by every app                                                         |
-
-### Installation
-
-The following steps assume your environment is already set up for running Expo / React Native apps (Xcode for iOS, Android Studio for Android).  
-If this is your first time, check out the [Expo local development setup guide](https://docs.expo.dev/get-started/set-up-your-environment/) beforehand.
-
-#### Prerequisites
-
-- **Bun**: This project uses Bun as the package manager. See the [Bun installation guide](https://bun.com/docs/installation) for instructions.
-- **CocoaPods** (iOS only): Required by the prebuild step. See the [installation guide](https://guides.cocoapods.org/using/getting-started.html#installation).
-
-#### Setup Steps
-
-- Fork the repo and clone it to your machine.
-- Run `bun install` from the repository root (this installs every workspace).
-- `cd apps/mobile`, then run `bun start` to start the development server.
-- Android only: run `cp -v google-services{.development,}.json`
-- Run the app with:
-  - `bun prebuild --platform ios && bun ios` (to open the iPhone simulator)
-  - `bun prebuild --platform android && bun android` (for the Android emulator).
-
-The first run generates the native projects and may take a while.
-
-> If you change anything that affects the native layer (config, plugins, native dependencies), run `bun prebuild` to regenerate the native projects.
-
-If you want to contribute and face issues during installation, please reach out to us at feedback@better-rail.co.il and we'll try to help!
-
-#### Workspace scripts
-
-Every app can also be driven from the repository root:
+- [Bun](https://bun.com/docs/installation)
+- Android SDK (compile SDK 37, build-tools 37, NDK 27.1.12297006), same as the preview workflow
 
 ```bash
-bun run mobile:start   # Metro / Expo dev server
-bun run mobile:e2e:ios # Maestro on an installed iOS E2E build
-bun run mobile:e2e:android # Maestro on an installed Android E2E build
-bun run api:dev        # the API in a local workerd (wrangler dev)
-bun run web:dev        # website + web app on :3000
-bun run lint           # oxlint + oxfmt across the repo
-bun run test           # mobile + api + egress-proxy + conductor + web tests
+bun install
+cd apps/mobile
+AARON_RAIL_PREVIEW=1 bunx expo prebuild --platform android --no-install
 ```
 
-EAS commands run from `apps/mobile`.
+Then assemble from `apps/mobile/android` with `./gradlew :app:assembleRelease`.
 
-### Contributing
+## License
 
-Pull requests are currently limited to collaborators in order to avoid spam.  
-If you found a bug or have an idea, please [open an issue](https://github.com/guytepper/better-rail/issues/new/choose) and we can discuss it from there.  
-Want to contribute to the app? Join our [Discord](https://discord.gg/uJ65ABeQsh) and share your ideas with us.  
-To report a security issue, please email us at feedback@better-rail.co.il
-
-### License
-
-The source code is released under the [AGPL-3.0 license](https://github.com/guytepper/better-rail/blob/main/LICENSE).  
-The project assets - the user interface, app branding, images, illustations, icons and fonts are outside the scope of the license.
+Source code is [AGPL-3.0](./LICENSE), © the Better Rail authors. UI, branding, images, and fonts stay outside that license, as in the upstream project.

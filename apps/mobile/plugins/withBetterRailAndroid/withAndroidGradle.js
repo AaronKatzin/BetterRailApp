@@ -10,7 +10,6 @@ const PREVIEW_APPLICATION_ID = "com.aaronkatzin.rail"
 // 2.58 reads Kotlin 2.2 metadata (RN 0.88). 2.59+ only passes its kapt args to AGP's legacy-kapt,
 // not the kotlin-kapt this app applies, so Hilt codegen fails there.
 const HILT_VERSION = "2.58"
-const GOOGLE_SERVICES_VERSION = "4.4.2"
 
 const APP_PLUGINS = `apply plugin: "kotlin-kapt"
 apply plugin: "dagger.hilt.android.plugin"`
@@ -25,15 +24,12 @@ const DEPENDENCIES = `    implementation("androidx.preference:preference-ktx:1.2
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
-    implementation("androidx.work:work-runtime-ktx:2.8.1")
-    implementation("androidx.cardview:cardview:1.0.0")
     implementation("com.google.dagger:hilt-android:${HILT_VERSION}")
     kapt("com.google.dagger:hilt-compiler:${HILT_VERSION}")
     implementation("androidx.datastore:datastore-preferences:1.0.0")
     implementation("androidx.room:room-runtime:2.7.0")
     implementation("androidx.room:room-ktx:2.7.0")
     kapt("androidx.room:room-compiler:2.7.0")
-    implementation("com.google.android.gms:play-services-auth-api-phone:18.0.2")
     testImplementation("junit:junit:4.13.2")`
 
 const withAppGradle = (config) =>
@@ -45,24 +41,6 @@ const withAppGradle = (config) =>
       tag: "better-rail-android-plugins",
       src,
       newSrc: APP_PLUGINS,
-      anchor: /apply plugin: "com\.facebook\.react"/,
-      offset: 1,
-      comment: "//",
-    }).contents
-
-    // 1b) Apply the Google Services gradle plugin so google-services.json is processed and
-    // FirebaseApp auto-inits — required for expo-notifications to obtain an FCM token on Android.
-    // Replaces what the removed @react-native-firebase/app config plugin used to do. The
-    // google-services.json itself is copied by Expo core from android.googleServicesFile.
-    src = mergeContents({
-      tag: "better-rail-android-google-services",
-      src,
-      // Preview google-services.json has no client for com.aaronkatzin.rail. Skip the
-      // plugin so the timetable widget still builds; it does not use Firebase.
-      newSrc:
-        process.env.AARON_RAIL_PREVIEW === "1"
-          ? `// AARON_RAIL_PREVIEW: google-services plugin skipped (no Firebase client for this package)`
-          : `apply plugin: "com.google.gms.google-services"`,
       anchor: /apply plugin: "com\.facebook\.react"/,
       offset: 1,
       comment: "//",
@@ -90,7 +68,7 @@ const withAppGradle = (config) =>
       }).contents
     }
 
-    // 4) Widget dependencies (Hilt, Room, DataStore, WorkManager, OkHttp, Gson, coroutines), plus the SMS User Consent API.
+    // 4) Widget dependencies (Hilt, Room, DataStore, OkHttp, Gson, coroutines).
     src = mergeContents({
       tag: "better-rail-android-dependencies",
       src,
@@ -112,17 +90,6 @@ const withProjectGradle = (config) =>
       tag: "better-rail-android-hilt-classpath",
       src,
       newSrc: `        classpath("com.google.dagger:hilt-android-gradle-plugin:${HILT_VERSION}")`,
-      anchor: /dependencies\s*{/,
-      offset: 1,
-      comment: "//",
-    }).contents
-
-    // Google Services gradle plugin classpath (buildscript) — pairs with the apply plugin in
-    // the app build.gradle; required for expo-notifications FCM (replaces @react-native-firebase/app).
-    src = mergeContents({
-      tag: "better-rail-android-google-services-classpath",
-      src,
-      newSrc: `        classpath("com.google.gms:google-services:${GOOGLE_SERVICES_VERSION}")`,
       anchor: /dependencies\s*{/,
       offset: 1,
       comment: "//",
@@ -155,7 +122,11 @@ const withPreviewApplicationId = (config) => {
       const manifestPath = path.join(cfg.modRequest.platformProjectRoot, "app", "src", "main", "AndroidManifest.xml")
       const manifest = fs.readFileSync(manifestPath, "utf8")
       const stripped = manifest.replace(/\s*<data android:scheme="exp\+better-rail"\/>/g, "")
-      if (stripped.includes('android:scheme="betterrail"') || stripped.includes("better-rail.co.il") || stripped.includes("exp+better-rail")) {
+      if (
+        stripped.includes('android:scheme="betterrail"') ||
+        stripped.includes("better-rail.co.il") ||
+        stripped.includes("exp+better-rail")
+      ) {
         throw new Error("AARON_RAIL_PREVIEW: manifest still claims a Better Rail scheme or App Link")
       }
       if (!stripped.includes('android:scheme="aaronrail"')) {

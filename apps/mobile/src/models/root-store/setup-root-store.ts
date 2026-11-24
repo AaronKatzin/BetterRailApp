@@ -1,7 +1,6 @@
 import * as storage from "@/utils/storage"
 import { Appearance } from "react-native"
 import { UnistylesRuntime } from "react-native-unistyles"
-import { syncAnalyticsUserProperties } from "@/services/analytics"
 import { applyAccentTheme } from "@/theme/apply-accent-theme"
 import { isAccentThemeSupported } from "@/utils/accent-theme-support"
 import {
@@ -17,7 +16,6 @@ import {
   hydrateRecentSearchesStore,
   resetRecentSearchesStore,
 } from "@/models/recent-searches/recent-searches"
-import { useFavoritesStore, getFavoritesSnapshot, hydrateFavoritesStore, resetFavoritesStore } from "@/models/favorites/favorites"
 import {
   useSettingsStore,
   getSettingsSnapshot,
@@ -25,48 +23,18 @@ import {
   resetSettingsStore,
   type ColorSchemePreference,
 } from "@/models/settings/settings"
-import { useRideStore, getRideSnapshot, hydrateRideStore, initializeRideStore, resetRideStore } from "@/models/ride/ride"
-import { initializeArrivalAlarm } from "@/models/ride/arrival-alarm"
-import { useUserStore, getUserSnapshot, hydrateUserStore, resetUserStore } from "@/models/user/user"
-import { useVouchersStore, getVouchersSnapshot, hydrateVouchersStore, resetVouchersStore } from "@/models/vouchers/vouchers"
 
-/**
- * The key we'll be saving our state as within async storage.
- */
 const ROOT_STATE_STORAGE_KEY = "root"
-const TELEMETRY_DISABLED_STORAGE_KEY = "telemetry_disabled"
-let appearanceAnalyticsSubscription: ReturnType<typeof Appearance.addChangeListener> | undefined
 
-/**
- * Collects a full snapshot of all stores for persistence.
- */
 function getSnapshot() {
   return {
     routePlan: getRoutePlanSnapshot(useRoutePlanStore.getState()),
     trainRoutes: getTrainRoutesSnapshot(),
     recentSearches: getRecentSearchesSnapshot(useRecentSearchesStore.getState()),
-    favoriteRoutes: getFavoritesSnapshot(useFavoritesStore.getState()),
     settings: getSettingsSnapshot(useSettingsStore.getState()),
-    ride: getRideSnapshot(useRideStore.getState()),
-    user: getUserSnapshot(useUserStore.getState()),
-    vouchers: getVouchersSnapshot(useVouchersStore.getState()),
   }
 }
 
-// Purchases must await durable accounting before finishing a StoreKit transaction.
-export async function persistRootStore() {
-  const saved = await storage.save(ROOT_STATE_STORAGE_KEY, getSnapshot())
-  if (!saved) throw new Error("Failed to persist app state")
-}
-
-/**
- * Setup the root state - loads persisted data and subscribes to changes.
- *
- * This reads from the same "root" AsyncStorage key that was previously used
- * by MobX State Tree. The snapshot format is compatible: MST's onSnapshot
- * produced plain JSON with the same key structure our hydrate functions expect.
- * On first run after migration, the data is re-persisted in Zustand format.
- */
 export async function setupRootStore() {
   let data: any
 
@@ -76,30 +44,23 @@ export async function setupRootStore() {
     data = {}
   }
 
-  // Hydrate each store individually so a failure in one doesn't prevent others
   const hydrators = [
     () => hydrateRoutePlanStore(data.routePlan),
     () => hydrateTrainRoutesStore(data.trainRoutes),
     () => hydrateRecentSearchesStore(data.recentSearches),
-    () => hydrateFavoritesStore(data.favoriteRoutes),
     () => hydrateSettingsStore(data.settings),
-    () => hydrateRideStore(data.ride),
-    () => hydrateUserStore(data.user),
-    () => hydrateVouchersStore(data.vouchers),
   ]
 
   for (const hydrate of hydrators) {
     try {
       hydrate()
     } catch (e) {
-      // If a store fails to hydrate, it keeps its defaults
       if (__DEV__) {
         console.warn("Store hydration failed:", e)
       }
     }
   }
 
-  // Restore both native colors and Unistyles before rendering the first screen.
   const applyColorScheme = (colorScheme: ColorSchemePreference) => {
     Appearance.setColorScheme(colorScheme === "automatic" ? "unspecified" : colorScheme)
     if (colorScheme === "automatic") {
@@ -108,13 +69,9 @@ export async function setupRootStore() {
       UnistylesRuntime.setAdaptiveThemes(false)
       UnistylesRuntime.setTheme(colorScheme)
     }
-    syncAnalyticsUserProperties({
-      color_scheme: Appearance.getColorScheme() ?? "unspecified",
-      color_scheme_preference: colorScheme,
-    })
   }
   applyColorScheme(useSettingsStore.getState().colorScheme)
-  // Binaries before v3 have no themes, so they keep the classic look
+
   const applyTheme = () => {
     const { accentTheme, useAlternateTimeFont } = useSettingsStore.getState()
     if (isAccentThemeSupported()) applyAccentTheme(accentTheme, useAlternateTimeFont)
@@ -122,38 +79,12 @@ export async function setupRootStore() {
   }
   applyTheme()
 
-  appearanceAnalyticsSubscription?.remove()
-  appearanceAnalyticsSubscription = Appearance.addChangeListener(({ colorScheme }) => {
-    if (useSettingsStore.getState().colorScheme !== "automatic") return
-    syncAnalyticsUserProperties({ color_scheme: colorScheme ?? "unspecified", color_scheme_preference: "automatic" })
-  })
-
-  // Run afterCreate equivalents
-  initializeRideStore()
-  initializeArrivalAlarm()
-
-  // Re-persist immediately to normalize the data format.
-  // This ensures any data saved by the old MobX State Tree format
-  // is re-written in the Zustand snapshot format on first launch.
   await storage.save(ROOT_STATE_STORAGE_KEY, getSnapshot())
 
-  // Sync telemetry disabled flag with async storage for backwards compatibility
-  const userState = useUserStore.getState()
-  if (userState.disableTelemetry === true) {
-    const telemetryDisabledFlag = await storage.load(TELEMETRY_DISABLED_STORAGE_KEY)
-    if (!telemetryDisabledFlag) {
-      await storage.save(TELEMETRY_DISABLED_STORAGE_KEY, true)
-    }
-  } else if (userState.disableTelemetry === false) {
-    await storage.remove(TELEMETRY_DISABLED_STORAGE_KEY)
-  }
-
-  // Subscribe to all store changes and persist snapshots
   const persist = () => storage.save(ROOT_STATE_STORAGE_KEY, getSnapshot())
 
   useRoutePlanStore.subscribe(persist)
   useRecentSearchesStore.subscribe(persist)
-  useFavoritesStore.subscribe(persist)
   useSettingsStore.subscribe((state, previousState) => {
     if (state.colorScheme !== previousState.colorScheme) applyColorScheme(state.colorScheme)
     if (state.accentTheme !== previousState.accentTheme || state.useAlternateTimeFont !== previousState.useAlternateTimeFont) {
@@ -161,21 +92,11 @@ export async function setupRootStore() {
     }
     persist()
   })
-  useRideStore.subscribe(persist)
-  useUserStore.subscribe(persist)
-  useVouchersStore.subscribe(persist)
 }
 
-/**
- * Clears all store data back to defaults.
- */
 export function clearAllData() {
   resetRoutePlanStore()
   resetTrainRoutesStore()
   resetRecentSearchesStore()
-  resetFavoritesStore()
   resetSettingsStore()
-  resetRideStore()
-  resetUserStore()
-  resetVouchersStore()
 }

@@ -10,13 +10,11 @@ import {
   StationInfo,
 } from "./rail-api.types"
 import { API_CONFIG } from "@/config/api-config"
-import { setAnalyticsUserProperty } from "@/services/analytics"
 
 export class RailApi {
   axiosInstance: AxiosInstance
 
   constructor() {
-    setAnalyticsUserProperty("rail_api", "server")
     this.axiosInstance = axios.create({
       baseURL: API_CONFIG.RAIL_API,
       timeout: 30000,

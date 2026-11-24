@@ -1,5 +1,5 @@
 {
-  "name": "better-rail-monorepo",
+  "name": "aaron-rail",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -7,29 +7,12 @@
   ],
   "scripts": {
     "mobile:start": "bun run --filter @better-rail/mobile start",
-    "mobile:ios": "bun run --filter @better-rail/mobile ios",
     "mobile:android": "bun run --filter @better-rail/mobile android",
     "mobile:prebuild": "bun run --filter @better-rail/mobile prebuild",
     "mobile:compile": "bun run --filter @better-rail/mobile compile",
     "mobile:test": "bun run --filter @better-rail/mobile test",
-    "mobile:update": "bash ./scripts/eas-update.sh",
-    "mobile:e2e:ios": "bun run --filter @better-rail/mobile e2e:ios",
-    "mobile:e2e:android": "bun run --filter @better-rail/mobile e2e:android",
-    "api:dev": "bun run --filter @better-rail/api dev",
-    "api:deploy": "bun run --filter @better-rail/api deploy",
-    "api:test": "bun run --filter @better-rail/api test",
-    "api:compile": "bun run --filter @better-rail/api compile",
-    "api:ingest": "bun run --filter @better-rail/api ingest",
-    "api:rail:pull": "bun run --filter @better-rail/api rail:pull",
-    "egress-proxy:dev": "bun run --filter @better-rail/egress-proxy dev",
-    "egress-proxy:test": "bun run --filter @better-rail/egress-proxy test",
-    "conductor:dev": "bun run --filter @better-rail/conductor dev",
-    "conductor:test": "bun run --filter @better-rail/conductor test",
-    "web:dev": "bun run --filter @better-rail/web dev",
-    "web:build": "bun run --filter @better-rail/web build",
-    "web:compile": "bun run --filter @better-rail/web compile",
-    "web:test": "bun run --filter @better-rail/web test",
-    "test": "bun run mobile:test && bun run api:test && bun run egress-proxy:test && bun run conductor:test && bun run web:test",
+    "stations:test": "bun run --filter @better-rail/stations test",
+    "test": "bun run mobile:test && bun run stations:test",
     "lint": "oxlint && oxfmt --check",
     "lint:fix": "oxlint --fix && oxfmt"
   },
@@ -48,15 +31,8 @@
     "zod": "^4.6.7"
   },
   "patchedDependencies": {
-    "react-native-quick-actions-shortcuts@1.0.2": "patches/react-native-quick-actions-shortcuts@1.0.2.patch",
-    "react-native-modal-datetime-picker@18.0.0": "patches/react-native-modal-datetime-picker@18.0.0.patch",
-    "react-native-watch-connectivity@1.1.0": "patches/react-native-watch-connectivity@1.1.0.patch",
-    "react-native-push-notification@8.1.1": "patches/react-native-push-notification@8.1.1.patch",
     "react-native-screens@4.30.0": "patches/react-native-screens@4.30.0.patch",
     "react-native-date-picker@5.0.12": "patches/react-native-date-picker@5.0.12.patch",
-    "expo-iap@5.5.0": "patches/expo-iap@5.5.0.patch",
-    "react-native-nitro-modules@0.37.1": "patches/react-native-nitro-modules@0.37.1.patch",
-    "expo-localization@58.0.5": "patches/expo-localization@58.0.5.patch",
-    "@expo/ui@58.0.27": "patches/@expo%2Fui@58.0.27.patch"
+    "expo-localization@58.0.5": "patches/expo-localization@58.0.5.patch"
   }
 }

@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from "react"
-import { View, Animated, AppState, Platform, Alert } from "react-native"
+import { View, Animated, AppState, Alert } from "react-native"
 import type { AppStateStatus } from "react-native"
 import { StyleSheet } from "react-native-unistyles"
 import {
@@ -11,7 +11,6 @@ import {
   ChangeDirectionButton,
   ResetTimeButton,
   DatePickerModal,
-  WebsiteHomeHandoff,
 } from "@/components"
 import { useShallow } from "zustand/react/shallow"
 import { useRoutePlanStore, useTrainRoutesStore, useDateTypeDisplayName } from "@/models"
@@ -22,19 +21,13 @@ import { translate, useFormattedDate } from "@/i18n"
 import { useQuery } from "react-query"
 import { differenceInHours, parseISO } from "date-fns"
 import { save, load } from "@/utils/storage"
-import { donateRouteIntent } from "@/utils/ios-helpers"
-import { trackEvent } from "@/services/analytics"
 import { useRouter, useIsFocused } from "expo-router"
-import { useObserve } from "expo-observe"
-import { useMountEffect } from "@/hooks"
-import { PlannerScreenHeader } from "./planner-screen-header"
 import { FlingGestureWrapper } from "./planner-slider-wrapper"
 import { ThemeBackground } from "@/components/theme-background/theme-background"
 import { routeListDayQueryKey } from "@/screens/route-list/route-list-query"
 
 export function PlannerScreen() {
   const router = useRouter()
-  const { markInteractive } = useObserve()
   const { date, origin, destination, setDate, switchDirection } = useRoutePlanStore(
     useShallow((s) => ({
       date: s.date,
@@ -70,7 +63,6 @@ export function PlannerScreen() {
   }
 
   const onDateReset = () => {
-    trackEvent("reset_date_press")
     HapticFeedback.trigger("impactLight")
     onDateChange(new Date())
   }
@@ -114,16 +106,11 @@ export function PlannerScreen() {
     setTimeout(() => {
       switchDirection()
     }, 50)
-
-    trackEvent("switch_stations_btn_press")
   }
 
   const onGetRoutePress = () => {
     const { id: originId } = origin
     const { id: destinationId } = destination
-    if (Platform.OS === "ios") {
-      donateRouteIntent(originId, destinationId)
-    }
     router.push({
       pathname: "/route-list",
       params: { originId, destinationId, time: String(date.getTime()), enableQuery: "true" },
@@ -158,11 +145,6 @@ export function PlannerScreen() {
     return () => subscription.remove()
   }, [])
 
-  useMountEffect(() => {
-    // Mark the screen as interactive for EAS Observe TTI metrics.
-    markInteractive()
-  })
-
   // Prefetch the complete search result, including any automatic date change.
   const queryKey = routeListDayQueryKey(origin?.id, destination?.id, date.getTime())
   useQuery(queryKey, () => getRoutes(origin?.id, destination?.id, date.getTime()), {
@@ -174,11 +156,8 @@ export function PlannerScreen() {
   return (
     <Screen testID="planner-screen" style={styles.root}>
       <ThemeBackground />
-      <WebsiteHomeHandoff />
       <FlingGestureWrapper onFling={onSwitchPress}>
         <View style={styles.contentWrapper}>
-          <PlannerScreenHeader />
-
           <Text preset="header" tx="plan.title" style={styles.screenTitle} />
 
           <Text preset="fieldLabel" tx="plan.origin" style={{ marginBottom: spacing[1] }} />
