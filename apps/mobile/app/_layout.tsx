@@ -1,27 +1,20 @@
 import "@/i18n"
 import "@/utils/ignore-warnings"
-import React, { useState, useEffect, useRef } from "react"
-import { AppState, I18nManager, Platform, useColorScheme } from "react-native"
+import React, { useState, useEffect } from "react"
+import { AppState, I18nManager, useColorScheme } from "react-native"
 import { useDeepLinking } from "@/hooks/use-deep-linking"
 import { Stack } from "expo-router/stack"
 import { enableLegacyHeaderAppearance } from "expo-router"
-import { ErrorBoundary as ExpoErrorBoundary } from "expo-router"
 import { ThemeProvider, DarkTheme, DefaultTheme } from "expo-router/react-navigation"
 import { useUnistyles } from "react-native-unistyles"
-import { QueryClient, QueryClientProvider, QueryCache, MutationCache, focusManager } from "react-query"
+import { QueryClient, QueryClientProvider, focusManager } from "react-query"
 import { SafeAreaProvider, initialWindowMetrics } from "react-native-safe-area-context"
-import * as Sentry from "@sentry/react-native"
 import { enableScreens } from "react-native-screens"
-import { PostHogProvider } from "posthog-react-native"
-import { Observe, ObserveRoot, useObserve } from "expo-observe"
 import { GestureHandlerRootView } from "react-native-gesture-handler"
-import { TipIAPProvider } from "@/services/iap/tip-iap-provider"
 
 import { initFonts } from "@/theme/fonts"
 import * as storage from "@/utils/storage"
-import { setupRootStore, RoutesNotFoundError } from "@/models"
-import { useRideStore } from "@/models/ride/ride"
-import { useFavoritesStore } from "@/models/favorites/favorites"
+import { setupRootStore } from "@/models"
 import {
   changeUserLanguage,
   getLanguageChangedInIOSSettings,
@@ -29,105 +22,14 @@ import {
   setInitialLanguage,
   setUserLanguage,
 } from "@/i18n/i18n"
-import { posthog } from "@/services/analytics"
-import { identifyPosthogUser, setAnalyticsUserProperty } from "@/services/analytics"
-import { trackInstalledWidgets } from "@/utils/widget-helpers"
-import { monitorLiveActivities } from "@/utils/ios-helpers"
-import { useForceUpdate } from "@/hooks/use-force-update"
-import { ForceUpdateScreen } from "@/screens/force-update/force-update-screen"
-import { openActiveRide } from "@/utils/helpers/open-active-ride"
-import { isNetworkError, isSuspendedNetworkError } from "@/utils/helpers/network-errors"
-import PushNotification from "react-native-push-notification"
-import "react-native-console-time-polyfill"
-import { IS_E2E } from "@/config/e2e"
-import { formSheetOptions } from "@/utils/form-sheet-options"
 
 enableScreens()
-
-// Enable per-route navigation metrics (cold/warm TTR, per-route TTI). Must run at
-// module scope before any screen mounts — it cannot be toggled at runtime.
-Observe.configure({
-  integrations: { "expo-router": { filteredParams: ["phone", "code"] } },
-})
-
-// SDK 58 made iOS 26+ stack headers transparent with system fonts; keep the opaque, themed headers.
 enableLegacyHeaderAppearance()
 
-const TELEMETRY_DISABLED_STORAGE_KEY = "telemetry_disabled"
-
-Sentry.init({
-  dsn: "https://203d8d08bca79bc415c95f41ab496d0b@o4510306230534144.ingest.us.sentry.io/4510307294248960",
-  enabled: !__DEV__ && !IS_E2E,
-  enableTombstone: true,
-  anrProfilingSampleRate: 1.0,
-  replaysSessionSampleRate: 0.1,
-  replaysOnErrorSampleRate: 1.0,
-  integrations: [
-    // Replay is pointless while Sentry is disabled, and its native video encoder
-    // segfaults in the simulator (SentryOnDemandReplay -> AVAssetWriterInput).
-    ...(__DEV__ ? [] : [Sentry.mobileReplayIntegration({ maskAllText: false, maskAllImages: false, maskAllVectors: false })]),
-    // Records navigation breadcrumbs (push/pop, from → to). Needs SDK >= 8.19, since this
-    // `init()` runs before the Root Layout mounts and older versions gave up instead of retrying.
-    Sentry.expoRouterIntegration(),
-  ],
-})
-
-async function disableSentryIfTelemetryDisabled() {
-  if (__DEV__) return
-  try {
-    const telemetryDisabled = await storage.load(TELEMETRY_DISABLED_STORAGE_KEY)
-    if (telemetryDisabled) {
-      Sentry.close()
-    }
-  } catch {}
-}
-
-disableSentryIfTelemetryDisabled()
-
-// Capture render-phase errors per route via Expo Router's ErrorBoundary. Attaches
-// route context to the event and marks in-flight navigation transactions as errored.
-export const ErrorBoundary = Sentry.wrapExpoRouterErrorBoundary(ExpoErrorBoundary)
-
-// Usually a connectivity blip or a slow connection timing out, so group them into one warning
-// issue. A spike there can still mean the API is unreachable or hanging (DNS, TLS, outage).
-const networkErrorContext = (error: unknown) =>
-  isNetworkError(error) ? { level: "warning" as const, fingerprint: ["axios-network-error"] } : {}
-
-export const queryClient = new QueryClient({
-  queryCache: new QueryCache({
-    onError: (error, query) => {
-      // "No routes found" is an expected, app-handled outcome (offline or genuinely no
-      // trains for the date). It's thrown only to drive react-query's onError, so skip
-      // reporting it — it otherwise floods Sentry with tens of thousands of noise events.
-      if (
-        error instanceof RoutesNotFoundError ||
-        (error instanceof Error && (error.name === "RoutesNotFoundError" || error.message === "Not found"))
-      )
-        return
-      // Most network errors come from requests the OS cut off while the app was suspended.
-      if (isSuspendedNetworkError(error)) return
-
-      Sentry.captureException(error, {
-        tags: { source: "react-query" },
-        extra: { queryKey: query.queryKey },
-        ...networkErrorContext(error),
-      })
-    },
-  }),
-  mutationCache: new MutationCache({
-    onError: (error, _variables, _context, mutation) => {
-      if (isSuspendedNetworkError(error)) return
-      Sentry.captureException(error, {
-        tags: { source: "react-query-mutation" },
-        extra: { mutationKey: mutation.options.mutationKey },
-        ...networkErrorContext(error),
-      })
-    },
-  }),
-})
+export const queryClient = new QueryClient()
 
 // React Native has no window focus events: treat returning to the app as focus,
-// so live data (delays, platforms) refetches right away instead of on the next interval
+// so live delays refetch right away instead of on the next interval.
 focusManager.setEventListener((handleFocus) => {
   const subscription = AppState.addEventListener("change", (state) => handleFocus(state === "active"))
   return () => subscription.remove()
@@ -136,10 +38,7 @@ focusManager.setEventListener((handleFocus) => {
 function AppStack() {
   const colorScheme = useColorScheme()
   const { theme } = useUnistyles()
-  const { isUpdateRequired } = useForceUpdate()
 
-  // Headers and screen backgrounds follow themes that own their surfaces (hex colors);
-  // the system look keeps React Navigation's defaults
   const baseNavigationTheme = colorScheme === "dark" ? DarkTheme : DefaultTheme
   const { background, text, separator } = theme.colors
   const navigationTheme =
@@ -150,21 +49,10 @@ function AppStack() {
         }
       : baseNavigationTheme
 
-  if (isUpdateRequired) return <ForceUpdateScreen />
-
   return (
     <ThemeProvider value={navigationTheme}>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(main)" options={{ headerShown: false }} />
-        <Stack.Screen name="settings" options={{ presentation: "modal" }} />
-        <Stack.Screen name="active-ride" options={{ presentation: "modal" }} />
-        {/* Root level, so the live ride modal presents it over itself instead of pushing a second (main) stack */}
-        <Stack.Screen name="train-info" options={formSheetOptions} />
-        <Stack.Screen name="announcements" options={{ presentation: "modal" }} />
-        <Stack.Screen name="voucher" options={{ presentation: "modal" }} />
-        <Stack.Screen name="live-announcement" options={{ presentation: "fullScreenModal" }} />
-        <Stack.Screen name="widget-onboarding" options={{ presentation: "fullScreenModal" }} />
-        <Stack.Screen name="paywall" options={{ presentation: "fullScreenModal" }} />
       </Stack>
     </ThemeProvider>
   )
@@ -173,50 +61,8 @@ function AppStack() {
 function RootLayout() {
   const [storeReady, setStoreReady] = useState(false)
   const [localeReady, setLocaleReady] = useState(false)
-  const appState = useRef(AppState.currentState)
-  const { markInteractive } = useObserve()
 
   useDeepLinking(storeReady)
-
-  useEffect(() => {
-    if (!storeReady) return
-    useRideStore
-      .getState()
-      .checkLiveActivitiesSupported()
-      .then((canRunLiveActivities) => {
-        if (Platform.OS === "ios" && canRunLiveActivities === true) {
-          monitorLiveActivities()
-        }
-      })
-  }, [storeReady])
-
-  useEffect(() => {
-    if (Platform.OS === "android") {
-      PushNotification.configure({
-        onNotification(notification) {
-          if (notification.userInteraction) {
-            openActiveRide()
-          }
-        },
-      })
-    }
-  }, [storeReady])
-
-  useEffect(() => {
-    if (!storeReady) return undefined
-    const subscription = AppState.addEventListener("change", (nextAppState) => {
-      if (appState.current.match(/inactive|background/) && nextAppState === "active") {
-        useFavoritesStore.getState().syncFavorites()
-        const rideState = useRideStore.getState()
-        rideState.checkLiveRideAuthorization()
-        if (rideState.id) {
-          rideState.isRideActive(rideState.id)
-        }
-      }
-      appState.current = nextAppState
-    })
-    return () => subscription.remove()
-  }, [storeReady])
 
   useEffect(() => {
     ;(async () => {
@@ -226,36 +72,21 @@ function RootLayout() {
   }, [])
 
   useEffect(() => {
-    // After the widget lookup, so its properties are sent this launch
-    trackInstalledWidgets().finally(identifyPosthogUser)
-
     storage.load("appLanguage").then(async (storedLanguageCode) => {
       const iosSettingsLanguage = getLanguageChangedInIOSSettings()
       const languageCode = iosSettingsLanguage ?? storedLanguageCode
 
-      // forceRTL only applies after a reload
       if (iosSettingsLanguage && isRTLLanguage(iosSettingsLanguage) !== I18nManager.isRTL) {
         changeUserLanguage(iosSettingsLanguage)
       } else if (languageCode) {
-        // Saved before setUserLanguage marks it synced, or a lost write reverts the choice next launch
         if (iosSettingsLanguage) await storage.save("appLanguage", iosSettingsLanguage)
         setUserLanguage(languageCode)
         setLocaleReady(true)
-        setAnalyticsUserProperty("user_locale", languageCode)
-        Sentry.setTag("user_locale", languageCode)
       } else {
         setInitialLanguage()
       }
     })
   }, [])
-
-  useEffect(() => {
-    // Signal EAS Observe that the app is interactive once the store + locale are
-    // ready — this is the point we stop returning null and render the real UI.
-    if (storeReady && localeReady) {
-      markInteractive()
-    }
-  }, [storeReady, localeReady, markInteractive])
 
   if (!storeReady || !localeReady) return null
 
@@ -263,15 +94,11 @@ function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-          <PostHogProvider client={posthog} autocapture={{ captureScreens: false }}>
-            <TipIAPProvider>
-              <AppStack />
-            </TipIAPProvider>
-          </PostHogProvider>
+          <AppStack />
         </SafeAreaProvider>
       </GestureHandlerRootView>
     </QueryClientProvider>
   )
 }
 
-export default Sentry.wrap(ObserveRoot.wrap(RootLayout))
+export default RootLayout

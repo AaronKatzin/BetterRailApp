@@ -2,33 +2,12 @@ import React from "react"
 import { Image, ScrollView } from "react-native"
 import { StyleSheet } from "react-native-unistyles"
 import { Text } from "@/components"
-import { useShallow } from "zustand/react/shallow"
-import { useRoutePlanStore } from "@/models"
-import { AnnouncementsList } from "@/components/announcements/announcements-list"
-import { AnnouncementsHeader } from "@/components/announcements/announcements-header"
-import { HIDE_RAIL_SERVICE_UPDATES } from "@/config/features"
 
 export function NoTrainsFoundMessage() {
-  const { origin, destination } = useRoutePlanStore(useShallow((s) => ({ origin: s.origin, destination: s.destination })))
-  const originId = origin.id
-  const destinationId = destination.id
-
-  const shouldShowAnnouncements = !HIDE_RAIL_SERVICE_UPDATES && originId !== destinationId
-
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Image style={styles.searchIcon} source={require("../../../../assets/search.png")} />
-      <Text
-        tx={shouldShowAnnouncements ? "routes.noTrainsFound" : "routes.sameStationsMessage"}
-        style={styles.noTrainsFoundText}
-      />
-
-      {shouldShowAnnouncements && (
-        <>
-          <AnnouncementsHeader separator="top" />
-          <AnnouncementsList updatesType="regular" relevantStationIds={[originId, destinationId]} />
-        </>
-      )}
+      <Text tx="routes.noTrainsFound" style={styles.noTrainsFoundText} />
     </ScrollView>
   )
 }

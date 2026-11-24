@@ -1,6 +1,0 @@
-{
-  "$schema": "./node_modules/@react-native-firebase/app/firebase-schema.json",
-  "react-native": {
-    "google_analytics_adid_collection_enabled": false
-  }
-}

@@ -1,4 +1,3 @@
-import type { TxKeyPath } from "@/i18n"
 import type { AppTheme, ThemeFont, ThemeSkin, ThemeTimeFont } from "./themes"
 
 export const cityThemeIds = ["telAviv", "jerusalem", "haifa", "beerSheva"] as const
@@ -39,7 +38,7 @@ interface ThemeDefinition {
   light: ThemeAppearance
   dark: ThemeAppearance
   /** A font riders can switch the route times to */
-  alternateTimeFont?: { font: ThemeTimeFont; label: TxKeyPath }
+  alternateTimeFont?: { font: ThemeTimeFont; label: string }
   /** Route times always use this font, so they match the theme's station names */
   timeFont?: ThemeTimeFont
   /** Always on, in both appearances */

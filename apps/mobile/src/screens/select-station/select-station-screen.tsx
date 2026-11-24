@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { View, Pressable, Platform, Alert, Image } from "react-native"
 import { StyleSheet } from "react-native-unistyles"
-import { Screen, Text, StationCard, FavoriteRoutes } from "@/components"
+import { Screen, Text, StationCard } from "@/components"
 import type { StationCardBadge } from "@/components/station-card/station-card"
 import { useShallow } from "zustand/react/shallow"
-import { useRoutePlanStore, useRecentSearchesStore, useFavoritesStore } from "@/models"
+import { useRoutePlanStore, useRecentSearchesStore } from "@/models"
 import { useNavigationParamsStore } from "@/models/navigation-params/navigation-params"
 import { useRouter, useLocalSearchParams, useNavigation } from "expo-router"
 import { NormalizedStation, useStations } from "@/data/stations"
@@ -47,8 +47,6 @@ export function SelectStationScreen() {
     })),
   )
   const saveRecentSearch = useRecentSearchesStore((s) => s.save)
-  const recentSearchEntries = useRecentSearchesStore((s) => s.entries)
-  const favoriteRoutesData = useFavoritesStore((s) => s.routes)
   const [searchTerm, setSearchTerm] = useState("")
   const [replacingStationId, setReplacingStationId] = useState<string>()
   const queryClient = useQueryClient()
@@ -147,9 +145,7 @@ export function SelectStationScreen() {
   return (
     <Screen testID="select-station-screen" style={styles.root} preset="fixed" unsafe={true}>
       <View style={styles.searchBarWrapper}>
-        {!allowedStations && (
-          <SearchInput searchTerm={searchTerm} setSearchTerm={setSearchTerm} autoFocus={favoriteRoutesData.length < 2} />
-        )}
+        {!allowedStations && <SearchInput searchTerm={searchTerm} setSearchTerm={setSearchTerm} autoFocus />}
         <Pressable testID="cancel-station-selection" onPress={() => router.back()}>
           <Text style={styles.cancelLink} tx="common.cancel" />
         </Pressable>
@@ -178,15 +174,7 @@ export function SelectStationScreen() {
           contentContainerStyle={styles.listContent}
           ListFooterComponent={<View style={styles.listFooter} />}
           extraData={replacingStationId}
-          // An element rather than a component: an inline component remounts on every render and resets the favorites' edit mode
-          ListEmptyComponent={
-            allowedStations ? null : (
-              <View>
-                <RecentSearchesBox selectionType={selectionType} />
-                {recentSearchEntries.length > 1 && <FavoriteRoutes />}
-              </View>
-            )
-          }
+          ListEmptyComponent={allowedStations ? null : <RecentSearchesBox selectionType={selectionType} />}
         />
       </View>
     </Screen>

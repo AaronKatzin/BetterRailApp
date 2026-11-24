@@ -2,11 +2,8 @@ import React from "react"
 import { View, Image, Platform } from "react-native"
 import type { ImageSourcePropType } from "react-native"
 import { StyleSheet } from "react-native-unistyles"
-import { ContextMenu } from "@/components/context-menu/context-menu"
 import TouchableScale from "react-native-touchable-scale"
 import { Text } from "@/components"
-import { translate } from "@/i18n"
-import { IS_E2E } from "@/config/e2e"
 
 type StationSearchEntryProps = {
   testID?: string
@@ -20,27 +17,21 @@ export const StationSearchEntry = (props: StationSearchEntryProps) => (
   <TouchableScale
     testID={props.testID}
     onPress={props.onPress}
+    onLongPress={props.onHide}
     activeScale={0.96}
     friction={8}
     tension={Platform.select({ ios: 8, android: undefined })}
     style={styles.searchEntryWrapper}
   >
-    <ContextMenu
-      disabled={IS_E2E}
-      title={props.name}
-      previewBorderRadius={6}
-      actions={[{ title: translate("selectStation.hide"), systemIcon: "trash", destructive: true, onPress: props.onHide }]}
-    >
-      <View style={styles.searchEntryImageWrapper}>
-        {props.image ? (
-          <Image source={props.image} style={styles.searchEntryImage} />
-        ) : (
-          <View style={styles.emptyCardWrapper}>
-            <Image source={require("../../../../assets/railway-station.png")} style={styles.emptyCardImage} />
-          </View>
-        )}
-      </View>
-    </ContextMenu>
+    <View style={styles.searchEntryImageWrapper}>
+      {props.image ? (
+        <Image source={props.image} style={styles.searchEntryImage} />
+      ) : (
+        <View style={styles.emptyCardWrapper}>
+          <Image source={require("../../../../assets/railway-station.png")} style={styles.emptyCardImage} />
+        </View>
+      )}
+    </View>
     <Text style={styles.searchEntryText}>{props.name}</Text>
   </TouchableScale>
 )

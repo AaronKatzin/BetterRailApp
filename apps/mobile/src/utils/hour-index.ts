@@ -1,5 +1,4 @@
-import { getVersion } from "react-native-device-info"
-
+/** The hour index ships with this app. There is no older binary to keep compatible. */
 export function isHourIndexSupported(): boolean {
-  return Number(getVersion().split(".")[0]) >= 3
+  return true
 }

@@ -3,7 +3,6 @@ import { View, Image, Platform } from "react-native"
 import { StyleSheet } from "react-native-unistyles"
 import { useShallow } from "zustand/react/shallow"
 import { useRoutePlanStore, useRecentSearchesStore } from "@/models"
-import { trackEvent } from "@/services/analytics"
 import { ScrollView } from "react-native-gesture-handler"
 import { Text } from "@/components"
 import { isRTL } from "@/i18n"
@@ -45,7 +44,6 @@ export function RecentSearchesBox(props: RecentSearchesBoxProps) {
   const sortedSearches = [...entries].sort((a, b) => rankOf(a.id) - rankOf(b.id)).slice(0, 6)
 
   const onStationPress = (entry) => {
-    trackEvent("recent_station_selected")
     const station = { id: entry.id, name: entry.id }
     save({ id: station.id })
 

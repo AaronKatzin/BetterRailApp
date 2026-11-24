@@ -1,26 +1,19 @@
 /* eslint-disable react-native/no-inline-styles */
-import React, { useEffect, useState } from "react"
-import { Platform, View } from "react-native"
-import { StyleSheet, useUnistyles } from "react-native-unistyles"
+import React, { useState } from "react"
+import { View } from "react-native"
+import { StyleSheet } from "react-native-unistyles"
 import { ScrollView } from "react-native-gesture-handler"
-import Animated, { FadeInDown, FadeOutDown } from "react-native-reanimated"
 
 import { useShallow } from "zustand/react/shallow"
-import { useRideStore } from "@/models"
-import { useRideProgress } from "@/hooks/use-ride-progress"
 import { spacing } from "@/theme"
-import { RouteDetailsHeader, Screen, WebsiteHandoff } from "@/components"
+import { RouteDetailsHeader, Screen } from "@/components"
 import {
-  LiveRideSheet,
   LongRouteWarning,
   RouteChangeWarnings,
   RouteExchangeDetails,
   RouteLine,
   RouteStationCard,
   RouteStopCard,
-  StartRideButton,
-  TrainInfoButton,
-  VoucherButton,
 } from "./components"
 
 import { useQuery } from "react-query"
@@ -29,21 +22,17 @@ import { RouteApi } from "@/services/api/route-api"
 import { useNavigationParamsStore } from "@/models/navigation-params/navigation-params"
 import { useStations } from "@/data/stations"
 import { calculateDelayedTime, formatClockTime, formatDateForAPI, formatTime } from "@/utils/helpers/date-helpers"
-import { getSelectedRide, isSameRoute } from "@/utils/helpers/ride-helpers"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { publishFreshRoutes } from "@/screens/route-list/route-list-query"
 
 const routeApi = new RouteApi()
-import { isLiquidGlassSupported } from "@/utils/liquid-glass"
-import { getVoucherTrain } from "@/utils/helpers/voucher-helpers"
 
-// The text button renders 4pt taller than its minimum at the default font
-// scale because of its line box and padding. Match that visible surface.
-const floatingButtonSize = (fontScale: number) => Math.max(59, 55 * Math.min(fontScale, 1.2))
+function getSelectedRide(routes: RouteItem[], trainNumbers: number[]) {
+  const key = trainNumbers.join()
+  return routes.find((route) => route.trains.map((train) => train.trainNumber).join() === key)
+}
 
-// Passed by the route file, since usePathname() follows whichever sheet is focused on top
-export function RouteDetailsScreen({ screenName = "routeDetails" }: { screenName?: "routeDetails" | "activeRide" }) {
-  const { rt } = useUnistyles()
+export function RouteDetailsScreen({ screenName = "routeDetails" }: { screenName?: "routeDetails" }) {
   const {
     routeItem: paramsRouteItem,
     originId,
@@ -52,16 +41,7 @@ export function RouteDetailsScreen({ screenName = "routeDetails" }: { screenName
     useShallow((s) => ({ routeItem: s.routeItem, originId: s.originId, destinationId: s.destinationId })),
   )
   const viaStationId = paramsRouteItem.viaStationId
-  const {
-    rideRoute,
-    id: rideId,
-    stopRide,
-  } = useRideStore(useShallow((s) => ({ rideRoute: s.route, id: s.id, stopRide: s.stopRide })))
-  const canRunLiveActivities = useRideStore((s) => s.canRunLiveActivities)
   const allStations = useStations()
-
-  // Derived from both inputs: openActiveRide can swap the params under a mounted screen
-  const isRideOnThisRoute = isSameRoute(rideRoute, paramsRouteItem)
 
   const trainNumbers = paramsRouteItem.trains.map((t) => t.trainNumber)
 
@@ -82,38 +62,12 @@ export function RouteDetailsScreen({ screenName = "routeDetails" }: { screenName
     {
       initialData: paramsRouteItem,
       refetchInterval: 60_000,
-      enabled: !isRideOnThisRoute,
     },
   )
 
-  // if the ride is on this route, we use the ride's route, since it has the latest data
-  // otherwise we use the freshly fetched route data
-  const routeItem = (() => {
-    if (isRideOnThisRoute) return rideRoute as unknown as RouteItem
-    return freshRouteItem ?? paramsRouteItem
-  })()
-
-  const progress = useRideProgress({ route: routeItem, enabled: isRideOnThisRoute })
-  const { stations } = progress
-
+  const routeItem = freshRouteItem ?? paramsRouteItem
   const insets = useSafeAreaInsets()
-
-  const voucherTrain = getVoucherTrain(routeItem)
-  // During a ride the action buttons stack above the sheet, so the route needs room to scroll past them
-  const liveActionsRowHeight = isRideOnThisRoute ? floatingButtonSize(rt.fontScale) + spacing[3] : 0
-  const [shouldFadeRideButton, setShouldFadeRideButton] = useState(false)
   const [showEntireRoute, setShowEntireRoute] = useState(false)
-
-  useEffect(() => {
-    // allow button fade only after the view mounts; disable the animation when the view appears initally.
-    setShouldFadeRideButton(true)
-  }, [])
-
-  useEffect(() => {
-    if (rideId && progress.status === "arrived") {
-      stopRide(rideId)
-    }
-  }, [progress.status, rideId])
 
   return (
     <Screen
@@ -124,15 +78,6 @@ export function RouteDetailsScreen({ screenName = "routeDetails" }: { screenName
       keyboardAvoiding={false}
       statusBar="light-content"
     >
-      {routeItem && originId && destinationId && (
-        <WebsiteHandoff
-          originId={originId}
-          destinationId={destinationId}
-          time={routeItem.departureTime}
-          trainNumbers={routeItem.trains.map((train) => train.trainNumber)}
-          viaStationId={routeItem.viaStationId}
-        />
-      )}
       <View style={{ flex: 1 }}>
         <RouteDetailsHeader
           routeItem={routeItem}
@@ -146,7 +91,7 @@ export function RouteDetailsScreen({ screenName = "routeDetails" }: { screenName
 
         <View style={{ flex: 1 }}>
           <ScrollView
-            contentContainerStyle={{ paddingTop: spacing[4], paddingBottom: 80 + insets.bottom + liveActionsRowHeight }}
+            contentContainerStyle={{ paddingTop: spacing[4], paddingBottom: 80 + insets.bottom }}
             showsVerticalScrollIndicator={false}
           >
             {routeItem.isMuchLonger && screenName === "routeDetails" && <LongRouteWarning />}
@@ -205,17 +150,14 @@ export function RouteDetailsScreen({ screenName = "routeDetails" }: { screenName
                             stopTime={formatClockTime(station.arrivalTime)}
                             delayedTime={calculateDelayedTime(station.arrivalTime, train.delay)}
                             style={{ zIndex: 20 - idx }}
-                            topLineState={isRideOnThisRoute ? stations[station.stationId]?.top || "idle" : "idle"}
-                            bottomLineState={isRideOnThisRoute ? stations[station.stationId]?.bottom || "idle" : "idle"}
+                            topLineState="idle"
+                            bottomLineState="idle"
                             isCancelled={station.cancelled}
                           />
                         </View>
                       )) // if there are no stops, display a separating line between the route station cards
                     ) : (
-                      <RouteLine
-                        style={{ start: "35.44%", height: 30 }}
-                        state={isRideOnThisRoute ? stations[train.destinationStationId]?.bottom || "idle" : "idle"}
-                      />
+                      <RouteLine style={{ start: "35.44%", height: 30 }} state="idle" />
                     )}
 
                     {/* Destination station */}
@@ -253,7 +195,6 @@ export function RouteDetailsScreen({ screenName = "routeDetails" }: { screenName
                         departurePlatform={routeItem.trains[index + 1].originPlatform}
                         firstTrain={train}
                         secondTrain={routeItem.trains[index + 1]}
-                        isRideOnThisRoute={isRideOnThisRoute}
                       />
                     )}
                   </View>
@@ -284,8 +225,8 @@ export function RouteDetailsScreen({ screenName = "routeDetails" }: { screenName
                             stopTime={formatTime(stop.departureTime)}
                             delayedTime={calculateDelayedTime(stop.departureTime, train.delay)}
                             style={{ zIndex: 20 - idx }}
-                            topLineState={isRideOnThisRoute ? stations[stop.stationId]?.top || "idle" : "idle"}
-                            bottomLineState={isRideOnThisRoute ? stations[stop.stationId]?.bottom || "idle" : "idle"}
+                            topLineState="idle"
+                            bottomLineState="idle"
                             isCancelled={stop.cancelled}
                           />
                         </View>
@@ -295,7 +236,7 @@ export function RouteDetailsScreen({ screenName = "routeDetails" }: { screenName
                         <RouteLine
                           style={{ start: "35.44%", height: 30 }}
                           // TODO: The line state doesn't work properly
-                          state={isRideOnThisRoute ? stations[train.destinationStationId]?.bottom || "idle" : "idle"}
+                          state="idle"
                         />
                       )}
 
@@ -314,7 +255,6 @@ export function RouteDetailsScreen({ screenName = "routeDetails" }: { screenName
                       departurePlatform={routeItem.trains[index + 1].originPlatform}
                       firstTrain={train}
                       secondTrain={routeItem.trains[index + 1]}
-                      isRideOnThisRoute={isRideOnThisRoute}
                     />
                   )}
                 </View>
@@ -322,55 +262,12 @@ export function RouteDetailsScreen({ screenName = "routeDetails" }: { screenName
             })}
           </ScrollView>
         </View>
-
-        {isRideOnThisRoute && (
-          <Animated.View
-            entering={shouldFadeRideButton && FadeInDown}
-            exiting={FadeOutDown}
-            // zIndex is needed for Android in order to make the button pressable
-            style={{ position: "absolute", left: 0, right: 0, bottom: 0, zIndex: Platform.select({ ios: 0, android: 1 }) }}
-          >
-            {/* Train composition and vouchers matter most while riding, so their actions ride above the sheet */}
-            <View style={styles.liveActions}>
-              {voucherTrain && <VoucherButton train={voucherTrain} style={styles.infoButton} />}
-              <TrainInfoButton route={routeItem} style={styles.infoButton} />
-            </View>
-            {/* The wrapper is already pinned to the bottom. Keeping the sheet in flow stacks the actions above it, not under it */}
-            <LiveRideSheet progress={progress} screenName={screenName} style={styles.liveRideSheet} />
-          </Animated.View>
-        )}
-
-        {!isRideOnThisRoute && (canRunLiveActivities || voucherTrain) && (
-          <Animated.View
-            entering={shouldFadeRideButton && FadeInDown.delay(100)}
-            exiting={FadeOutDown}
-            style={{
-              position: "absolute",
-              left: 0,
-              right: insets.right + 18,
-              bottom: Math.max(insets.bottom + 12, 32),
-              zIndex: 10,
-              flexDirection: "row",
-              justifyContent: "flex-end",
-              alignItems: "center",
-              gap: spacing[3],
-            }}
-          >
-            {voucherTrain && <VoucherButton train={voucherTrain} style={styles.infoButton} />}
-
-            {(Platform.OS === "android" || canRunLiveActivities) && (
-              <TrainInfoButton route={routeItem} style={styles.infoButton} />
-            )}
-
-            {canRunLiveActivities && <StartRideButton route={routeItem} screenName={screenName} />}
-          </Animated.View>
-        )}
       </View>
     </Screen>
   )
 }
 
-const styles = StyleSheet.create((theme, rt) => ({
+const styles = StyleSheet.create((theme) => ({
   root: {
     flex: 1,
     backgroundColor: theme.colors.background,
@@ -381,30 +278,5 @@ const styles = StyleSheet.create((theme, rt) => ({
   },
   stationContainer: {
     backgroundColor: theme.colors.background,
-  },
-  infoButton: {
-    width: floatingButtonSize(rt.fontScale),
-    height: floatingButtonSize(rt.fontScale),
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: Platform.select({ ios: 16, android: 6 }),
-    borderCurve: "continuous",
-    // Android's tertiaryBackground is the screen background — inputBackground is the raised one.
-    backgroundColor: isLiquidGlassSupported
-      ? undefined
-      : Platform.OS === "android"
-        ? theme.colors.inputBackground
-        : theme.colors.tertiaryBackground,
-    elevation: 3,
-  },
-  liveActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: theme.spacing[3],
-    paddingEnd: rt.insets.right + 18,
-    marginBottom: theme.spacing[3],
-  },
-  liveRideSheet: {
-    position: "relative",
   },
 }))

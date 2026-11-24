@@ -1,6 +1,5 @@
 import { I18nManager, NativeModules, Platform, Settings } from "react-native"
 import RNRestart from "react-native-restart-newarch"
-import { setAnalyticsUserProperty } from "@/services/analytics"
 import { setStationLocale } from "@/data/stations"
 import Preferences from "react-native-default-preference"
 import * as storage from "@/utils/storage"
@@ -39,8 +38,6 @@ export function resolveUse12HourClock(languageCode: LanguageCode) {
   const uses24hourClock = Localization.getCalendars()[0]?.uses24hourClock ?? true
   return languageCode === "en" && !!deviceLocale?.startsWith("en") && !uses24hourClock
 }
-
-setAnalyticsUserProperty("device_locale", deviceLocale)
 
 export function getInitialLanguage(): LanguageCode {
   if (IS_E2E) return "en"

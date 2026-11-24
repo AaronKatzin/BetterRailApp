@@ -1,48 +1,13 @@
-# Better Rail
+# Aaron Rail (mobile)
 
-<img src="https://better-rail.co.il/assets/images/iphone-screenshot@2x.png" width="300" align="right">
+Android shell for the commute widget. See the [repository README](../../README.md).
 
-<a href="https://github.com/guytepper/better-rail/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-brightgreen" alt="" /></a>&nbsp;<a href="https://x.com/better_rail"><img src="https://img.shields.io/twitter/follow/better_rail" alt="" /></a>
+Native widget code is in `android-native/` and copied into the Expo prebuild by `plugins/withBetterRailAndroid`. `android/` is generated and gitignored.
 
-Better Rail is an open source mobile client for Israel Railways, with an emphasis on great design, performance and accessibility.
+Preview installs:
 
-**Available on the [App Store](https://apps.apple.com/il/app/better-rail/id1562982976)</a> & [Play Store](https://play.google.com/store/apps/details?id=com.betterrail)**
+```bash
+AARON_RAIL_PREVIEW=1 bunx expo prebuild --platform android --no-install
+```
 
-## Overview
-
-Better Rail is built with React Native. We also use Swift, SwiftUI and Kotlin to leverage native platform functionalities.
-
-### Installation
-
-The following steps assume your environment is already set up for running Expo / React Native apps (Xcode for iOS, Android Studio for Android).  
-If this is your first time, check out the [Expo local development setup guide](https://docs.expo.dev/get-started/set-up-your-environment/) beforehand.
-
-#### Prerequisites
-
-- **Bun**: This project uses Bun as the package manager. See the [Bun installation guide](https://bun.com/docs/installation) for instructions.
-- **CocoaPods** (iOS only): Required by the prebuild step. See the [installation guide](https://guides.cocoapods.org/using/getting-started.html#installation).
-
-#### Setup Steps
-
-- Fork the repo and clone it to your machine.
-- Run `bun install` from the repository root (this is a Bun workspaces monorepo; the app lives in `apps/mobile`).
-- `cd apps/mobile`, then run `bun start` to start the development server.
-- Android only: run `cp -v google-services{.development,}.json`
-- Run the app with:
-  - `bun prebuild --platform ios && bun ios` (to open the iPhone simulator)
-  - `bun prebuild --platform android && bun android` (for the Android emulator).
-
-The first run generates the native projects and may take a while.
-
-> If you change anything that affects the native layer (config, plugins, native dependencies), run `bun prebuild` to regenerate the native projects.
-
-If you want to contribute and face issues during installation, please reach out to us at feedback@better-rail.co.il and we'll try to help!
-
-### End-to-end tests
-
-The cross-platform Maestro suite and CI instructions live in [`.maestro/README.md`](.maestro/README.md).
-
-### License
-
-The source code is released under the [AGPL-3.0 license](https://github.com/guytepper/better-rail/blob/main/LICENSE).  
-The project assets - the user interface, app branding, images, illustations, icons and fonts are outside the scope of the license.
+`android.package` stays `com.betterrail` (the widget classes' namespace). The preview application id `com.aaronkatzin.rail` is applied by the Gradle config plugin.
